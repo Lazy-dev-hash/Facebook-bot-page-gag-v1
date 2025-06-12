@@ -427,7 +427,7 @@ then start a new session. 🔄`;
 ╰─────────────────────────────╯
 🎉 Gagstock tracking is now active!
 
-You'll receive beautiful updates when:
+You'll receive beaut updates when:
 🔄 Stock levels change
 🌤️ Weather conditions update
 ⏰ Restock timers tick down
