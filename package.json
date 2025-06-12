@@ -1,15 +1,17 @@
 {
-  "name": "nodejs",
+  "name": "facebook-gag-bot",
   "version": "1.0.0",
-  "description": "",
+  "type": "module",
+  "description": "A Facebook bot for Grow A Garden stock tracking.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@types/node": "^22.13.11"
+    "axios": "^1.6.8",
+    "body-parser": "^1.20.2",
+    "chalk": "^5.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
   }
 }
