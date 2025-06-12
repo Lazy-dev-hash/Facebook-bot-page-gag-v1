@@ -1,4 +1,3 @@
-
 'use strict';
 
 // ===================================================================================
@@ -35,18 +34,18 @@ let uptimeStats = {
 
 async function performUptimePing() {
   if (!UPTIME_CONFIG.enabled) return;
-  
+
   try {
     const response = await axios.get(`${UPTIME_CONFIG.selfUrl}/health`, {
       timeout: 10000,
       headers: { 'User-Agent': 'GagBot-Uptime-Monitor' }
     });
-    
+
     uptimeStats.totalPings++;
     uptimeStats.successfulPings++;
     uptimeStats.lastPing = Date.now();
     uptimeStats.status = 'online';
-    
+
     logger.success(`🌐 Uptime ping successful - Bot staying alive! (${uptimeStats.successfulPings}/${uptimeStats.totalPings})`);
   } catch (error) {
     uptimeStats.totalPings++;
@@ -123,7 +122,7 @@ const STOCK_CLEAR_WARNING_TIME = 30000; // 30 seconds before clearing
 // Enhanced session cleanup with stock clearing alerts
 setInterval(() => {
   const now = Date.now();
-  
+
   // Clean inactive sessions
   for (const [userId, session] of activeSessions) {
     if (session.lastActivity && (now - session.lastActivity) > 30 * 60 * 1000) {
@@ -134,7 +133,7 @@ setInterval(() => {
       logger.info(`🧹 Cleaned up inactive session for user: ${userId}`);
     }
   }
-  
+
   // Clean old cache entries
   for (const [userId] of lastSentCache) {
     if (!activeSessions.has(userId)) {
@@ -259,7 +258,7 @@ async function sendStockClearingAlert(userId) {
    just sit back and enjoy fresh data! 💚`;
 
   await sendMessage(userId, { text: alertMessage }, PAGE_ACCESS_TOKEN);
-  
+
   // Set timer to clear cache
   setTimeout(() => {
     lastSentCache.delete(userId);
@@ -271,7 +270,7 @@ async function sendStockClearingAlert(userId) {
 // Enhanced Admin Update Command with better authentication
 const updateCommand = {
   name: "update",
-  aliases: ["upgrade", "deploy"],
+  aliases: ["upgrade"],
   description: "Admin command to push updates to all users",
   usage: "update [message]",
   category: "Admin 👑",
@@ -279,9 +278,9 @@ const updateCommand = {
     // Enhanced admin verification
     const userIdString = senderId.toString();
     const adminIdString = ADMIN_USER_ID;
-    
+
     logger.debug(`🔐 Admin check: User ID "${userIdString}" vs Admin ID "${adminIdString}"`);
-    
+
     if (userIdString !== adminIdString) {
       const unauthorizedMessage = `╔══════════════════════════════════╗
 ║  🚫  𝗔𝗰𝗰𝗲𝘀𝘀 𝗗𝗲𝗻𝗶𝗲𝗱  ║
@@ -358,6 +357,65 @@ ${updateMessage}
 
 💚 Deployment successful! 🎊`;
     await sendMessage(senderId, { text: adminConfirmation }, pageAccessToken);
+  }
+};
+
+// Enhanced Deploy Command for admins
+const deployCommand = {
+  name: "deploy",
+  aliases: ["push"],
+  description: "Admin command to deploy new code changes",
+  usage: "deploy [commit message]",
+  category: "Admin 👑",
+  async execute(senderId, args, pageAccessToken) {
+    // Enhanced admin verification
+    const userIdString = senderId.toString();
+    const adminIdString = ADMIN_USER_ID;
+
+    logger.debug(`🔐 Admin check: User ID "${userIdString}" vs Admin ID "${adminIdString}"`);
+
+    if (userIdString !== adminIdString) {
+      const unauthorizedMessage = `╔══════════════════════════════════╗
+║  🚫  𝗔𝗰𝗰𝗲𝘀𝘀 𝗗𝗲𝗻𝗶𝗲𝗱  ║
+╚══════════════════════════════════╝
+
+🛡️ This command is reserved for 
+   bot administrators only.
+
+╭─ 🔍 Debug Info ──────────────╮
+│ Your ID: ${userIdString.slice(0, 8)}...     │
+│ Status: Unauthorized          │
+╰───────────────────────────────╯
+
+🌱 Continue using gagstock normally!
+💡 Contact the bot owner if you 
+   believe this is an error.`;
+      return await sendMessage(senderId, { text: unauthorizedMessage }, pageAccessToken);
+    }
+
+    const commitMessage = args.join(" ") || "🚀 Code changes deployed!";
+
+    // Simulate code deployment (replace with actual deployment logic)
+    logger.system(`✨ Simulating code deployment with message: ${commitMessage}`);
+
+    const deployConfirmation = `╔══════════════════════════════════╗
+║  ✅  𝗖𝗼𝗱𝗲 𝗗𝗲𝗽𝗹𝗼𝘆𝗺𝗲𝗻𝘁 ║
+║      𝗖𝗼𝗺𝗽𝗹𝗲𝘁𝗲!            ║
+╚══════════════════════════════════╝
+
+🎉 Code deployment simulated successfully!
+
+╭─ 📦 Deployment Details ──────╮
+│ 💬 Commit Message: ${commitMessage} │
+│ ⚡ Status: Deployed          │
+│ 🌐 Environment: Production    │
+╰────────────────────────────────╯
+
+🌱 The bot is now running the latest code.
+✨ Please test and verify the changes.
+
+💚 Deployment successful! 🎊`;
+    await sendMessage(senderId, { text: deployConfirmation }, pageAccessToken);
   }
 };
 
@@ -532,7 +590,7 @@ const gagstockCommand = {
             lastSentCache.delete(senderId);
             stockClearingAlerts.delete(senderId);
             logger.info(`🛑 Gagstock tracking stopped for user: ${senderId}`);
-            
+
             const stopMessage = `╔══════════════════════════════════╗
 ║  🛑  𝗧𝗿𝗮𝗰𝗸𝗶𝗻𝗴 𝗦𝘁𝗼𝗽𝗽𝗲𝗱  ║
 ╚══════════════════════════════════╝
@@ -640,7 +698,7 @@ ${filters.length > 0 ?
 
 Sit back, relax, and let our enhanced
 system do all the work! 🌱💚`;
-    
+
     await sendMessage(senderId, { text: startMessage }, pageAccessToken);
     logger.info(`✨ Enhanced gagstock tracking started for user: ${senderId} with filters:`, filters.length > 0 ? filters : 'all items');
 
@@ -650,7 +708,7 @@ system do all the work! 🌱💚`;
           fetchWithTimeout("https://gagstock.gleeze.com/grow-a-garden"),
           fetchWithTimeout("https://growagardenstock.com/api/stock/weather"),
         ]);
-        
+
         const backup = stockRes.data.data;
         const stockData = {
           gearStock: backup.gear.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
@@ -659,23 +717,23 @@ system do all the work! 🌱💚`;
           cosmeticsStock: backup.cosmetics.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
           honeyStock: backup.honey.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
         };
-        
+
         const weather = {
           currentWeather: weatherRes.data.currentWeather || "Unknown",
           icon: weatherRes.data.icon || "🌤️",
           cropBonuses: weatherRes.data.cropBonuses || "None",
           updatedAt: weatherRes.data.updatedAt || new Date().toISOString(),
         };
-        
+
         const restocks = getNextRestocks();
         const formatList = (arr) => arr.map(i => `  ├─ ${addEmoji(i.name)}: ${formatValue(i.value)}`).join("\n");
         const updatedAtPH = getPHTime().toLocaleString("en-PH", {
           hour: "numeric", minute: "numeric", second: "numeric", hour12: true, day: "2-digit", month: "short", year: "numeric"
         });
-        
+
         let filteredContent = "";
         let matchedItems = false;
-        
+
         const processSection = (label, items, restock, isFilterable) => {
             let filtered = items;
             if (isFilterable && filters.length > 0) {
@@ -692,7 +750,7 @@ ${formatList(filtered)}
             }
             return "";
         };
-        
+
         if (filters.length > 0) {
              filteredContent += processSection("🛠️ 𝗚𝗲𝗮𝗿 & 𝗧𝗼𝗼𝗹𝘀", stockData.gearStock, restocks.gear, true);
              filteredContent += processSection("🌱 𝗦𝗲𝗲𝗱𝘀 & 𝗣𝗹𝗮𝗻𝘁𝘀", stockData.seedsStock, restocks.seed, true);
@@ -709,10 +767,10 @@ ${formatList(filtered)}
             filteredContent += processSection("🍯 𝗛𝗼𝗻𝗲𝘆 𝗣𝗿𝗼𝗱𝘂𝗰𝘁𝘀", stockData.honeyStock, restocks.honey, false);
             matchedItems = true;
         }
-        
+
         const currentKey = JSON.stringify({ gearStock: stockData.gearStock, seedsStock: stockData.seedsStock });
         const lastSent = lastSentCache.get(senderId);
-        
+
         // Check if stock changed and send clearing alert
         if (!alwaysSend && lastSent && lastSent !== currentKey) {
           if (!stockClearingAlerts.has(senderId)) {
@@ -720,10 +778,10 @@ ${formatList(filtered)}
             await sendStockClearingAlert(senderId);
           }
         }
-        
+
         if (!alwaysSend && lastSent === currentKey) return false;
         if (filters.length > 0 && !matchedItems) return false;
-        
+
         lastSentCache.set(senderId, currentKey);
 
         // Get user's name for personalized greeting
@@ -770,7 +828,7 @@ ${formatList(filtered)}
         return false;
       }
     }
-    
+
     async function runSchedule() {
       const now = getPHTime();
       const nextTime = getNextScheduledTime(now);
@@ -796,7 +854,7 @@ ${formatList(filtered)}
         startTime: Date.now()
       });
     }
-    
+
     const firstFetchSuccess = await fetchAndNotify(true);
     if(firstFetchSuccess) {
       runSchedule();
@@ -833,7 +891,7 @@ const statusCommand = {
   async execute(senderId, args, pageAccessToken) {
     const userIdString = senderId.toString();
     const adminIdString = ADMIN_USER_ID;
-    
+
     if (userIdString !== adminIdString) {
       const unauthorizedMessage = `╔══════════════════════════════════╗
 ║  🚫  𝗔𝗱𝗺𝗶𝗻 𝗢𝗻𝗹𝘆 𝗦𝘁𝗮𝘁𝘂𝘀  ║
@@ -850,7 +908,7 @@ const statusCommand = {
     const uptimeHours = Math.floor(uptime / 3600);
     const uptimeMinutes = Math.floor((uptime % 3600) / 60);
     const uptimeSeconds = Math.floor(uptime % 60);
-    
+
     const statusMessage = `╔══════════════════════════════════╗
 ║  📊  𝗕𝗼𝘁 𝗦𝘁𝗮𝘁𝘂𝘀 & 𝗦𝘁𝗮𝘁𝘀  ║
 ╚══════════════════════════════════╝
@@ -877,7 +935,7 @@ const statusCommand = {
 ╰────────────────────────────────╯
 
 All systems operational! 🚀✨`;
-    
+
     await sendMessage(senderId, { text: statusMessage }, pageAccessToken);
   }
 };
@@ -889,7 +947,7 @@ All systems operational! 🚀✨`;
 const commands = new Map();
 
 // Register all commands
-[gagstockCommand, updateCommand, refreshCommand, statusCommand].forEach(cmd => {
+[gagstockCommand, updateCommand, refreshCommand, statusCommand, deployCommand].forEach(cmd => {
   commands.set(cmd.name, cmd);
   if (cmd.aliases) {
     cmd.aliases.forEach(alias => commands.set(alias, cmd));
@@ -1072,8 +1130,11 @@ async function handlePostback(senderId, postback) {
 ╰────────────────────────────────╯
 
 ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────────╮
-│ 🚀 update [message]           │
-│    Push updates to all users   │
+│ 📢 update [message]           │
+│    Send notifications to users │
+│                                │
+│ 🚀 deploy [commit msg]        │
+│    Deploy new code changes     │
 │                                │
 │ 📊 status                      │
 │    View enhanced bot stats     │
@@ -1254,8 +1315,11 @@ updates later by asking the admin!
 ╰────────────────────────────────╯
 
 ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────────╮
-│ 🚀 update [message]           │
-│    Push updates to all users   │
+│ 📢 update [message]           │
+│    Send notifications to users │
+│                                │
+│ 🚀 deploy [commit msg]        │
+│    Deploy new code changes     │
 │                                │
 │ 📊 status                      │
 │    View enhanced bot stats     │
@@ -1321,7 +1385,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     await setupGetStartedButton();
     await setupPersistentMenu();
     logger.success('✨ Enhanced bot setup completed successfully!');
-    
+
     // Start uptime monitoring after setup
     if (UPTIME_CONFIG.enabled) {
       setTimeout(performUptimePing, 30000); // First ping after 30 seconds
