@@ -19,6 +19,12 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 // ===================================================================================
 
 async function sendMessage(recipientId, messagePayload, pageAccessToken) {
+  // Input validation
+  if (!recipientId || !messagePayload || !pageAccessToken) {
+    logger.error('Missing required parameters for sendMessage');
+    return false;
+  }
+
   const request_body = {
     recipient: { id: recipientId },
     message: messagePayload,
@@ -26,12 +32,25 @@ async function sendMessage(recipientId, messagePayload, pageAccessToken) {
   };
 
   try {
-    await axios.post('https://graph.facebook.com/v19.0/me/messages', request_body, {
+    const response = await axios.post('https://graph.facebook.com/v19.0/me/messages', request_body, {
       params: { access_token: pageAccessToken },
+      timeout: 10000, // 10 second timeout
     });
     logger.success('Message sent to user:', recipientId);
+    return true;
   } catch (error) {
-    logger.error('Unable to send message:', error.response ? error.response.data : error.message);
+    if (error.response) {
+      logger.error('Facebook API error:', {
+        status: error.response.status,
+        data: error.response.data,
+        user: recipientId
+      });
+    } else if (error.request) {
+      logger.error('Network error sending message:', error.message);
+    } else {
+      logger.error('Error setting up message request:', error.message);
+    }
+    return false;
   }
 }
 
@@ -42,6 +61,21 @@ async function sendMessage(recipientId, messagePayload, pageAccessToken) {
 
 const activeSessions = new Map();
 const lastSentCache = new Map();
+const userRateLimit = new Map(); // Rate limiting per user
+const MAX_REQUESTS_PER_MINUTE = 10;
+
+// Clean up inactive sessions every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, session] of activeSessions) {
+    if (session.lastActivity && (now - session.lastActivity) > 30 * 60 * 1000) {
+      clearTimeout(session.timeout);
+      activeSessions.delete(userId);
+      lastSentCache.delete(userId);
+      logger.info(`Cleaned up inactive session for user: ${userId}`);
+    }
+  }
+}, 30 * 60 * 1000);
 const PH_TIMEZONE = "Asia/Manila";
 
 function pad(n) { return n < 10 ? "0" + n : n; }
@@ -226,12 +260,25 @@ const gagstockCommand = {
       const nextTime = getNextScheduledTime(now);
       const wait = Math.max(nextTime - now, 1000);
       const timer = setTimeout(async function trigger() {
-        const sessionExists = activeSessions.has(senderId);
-        if (!sessionExists) return;
-        await fetchAndNotify(false);
+        const session = activeSessions.get(senderId);
+        if (!session) return;
+        
+        // Update last activity
+        session.lastActivity = Date.now();
+        
+        const notified = await fetchAndNotify(false);
+        if (notified) {
+          logger.debug(`Stock update sent to user: ${senderId}`);
+        }
         runSchedule();
       }, wait);
-      activeSessions.set(senderId, { timeout: timer });
+      
+      activeSessions.set(senderId, { 
+        timeout: timer, 
+        lastActivity: Date.now(),
+        filters: filters,
+        startTime: Date.now()
+      });
     }
     const firstFetchSuccess = await fetchAndNotify(true);
     if(firstFetchSuccess) {
@@ -254,8 +301,34 @@ if (gagstockCommand.aliases) {
     gagstockCommand.aliases.forEach(alias => commands.set(alias, gagstockCommand));
 }
 
+function isRateLimited(userId) {
+  const now = Date.now();
+  const userRequests = userRateLimit.get(userId) || [];
+  
+  // Remove requests older than 1 minute
+  const recentRequests = userRequests.filter(time => now - time < 60000);
+  
+  if (recentRequests.length >= MAX_REQUESTS_PER_MINUTE) {
+    return true;
+  }
+  
+  recentRequests.push(now);
+  userRateLimit.set(userId, recentRequests);
+  return false;
+}
+
 async function handleMessage(senderId, message) {
   if (!message.text) return;
+  
+  // Rate limiting check
+  if (isRateLimited(senderId)) {
+    logger.warn(`Rate limited user: ${senderId}`);
+    await sendMessage(senderId, { 
+      text: "⏰ You're sending messages too quickly. Please wait a moment before trying again." 
+    }, PAGE_ACCESS_TOKEN);
+    return;
+  }
+  
   logger.info(`Processing message from ${senderId}: "${message.text}"`);
   const text = message.text.trim();
   const args = text.split(/\s+/);
@@ -270,7 +343,17 @@ async function handleMessage(senderId, message) {
       await sendMessage(senderId, { text: "😥 Oops! Something went wrong while running that command." }, PAGE_ACCESS_TOKEN);
     }
   } else {
-    logger.warn(`Command not found: '${commandName}' from user ${senderId}`);
+    // Add help command suggestion
+    if (commandName === 'help') {
+      await sendMessage(senderId, { 
+        text: "🤖 Available commands:\n• gagstock on - Start tracking\n• gagstock on [filter] - Track specific items\n• gagstock off - Stop tracking" 
+      }, PAGE_ACCESS_TOKEN);
+    } else {
+      logger.warn(`Command not found: '${commandName}' from user ${senderId}`);
+      await sendMessage(senderId, { 
+        text: `❓ Unknown command '${commandName}'. Type 'help' for available commands.` 
+      }, PAGE_ACCESS_TOKEN);
+    }
   }
 }
 
@@ -282,22 +365,91 @@ async function handleMessage(senderId, message) {
 const app = express().use(bodyParser.json());
 const PORT = process.env.PORT || 1337;
 
-app.listen(PORT, () => logger.system(`Webhook is listening on port ${PORT}`));
+// Add request logging middleware
+app.use((req, res, next) => {
+  logger.debug(`${req.method} ${req.path} - ${req.ip}`);
+  next();
+});
 
-app.post('/webhook', (req, res) => {
-  let body = req.body;
-  if (body.object === 'page') {
-    body.entry.forEach(function(entry) {
-      let webhook_event = entry.messaging[0];
-      let sender_psid = webhook_event.sender.id;
-      logger.webhook('Event received:', { from: sender_psid, type: webhook_event.message ? 'message' : 'other' });
-      if (webhook_event.message) {
-        handleMessage(sender_psid, webhook_event.message);
+// Add error handling middleware
+app.use((error, req, res, next) => {
+  logger.error('Express error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+  logger.system(`Webhook is listening on port ${PORT}`);
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  logger.system('SIGTERM received, shutting down gracefully...');
+  // Clean up active sessions
+  for (const [userId, session] of activeSessions) {
+    clearTimeout(session.timeout);
+    logger.info(`Cleaned up session for user: ${userId}`);
+  }
+  activeSessions.clear();
+  lastSentCache.clear();
+  
+  server.close(() => {
+    logger.system('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.system('SIGINT received, shutting down gracefully...');
+  process.exit(0);
+});
+
+app.post('/webhook', async (req, res) => {
+  try {
+    let body = req.body;
+    
+    // Validate webhook body
+    if (!body || body.object !== 'page') {
+      logger.warn('Invalid webhook object:', body?.object);
+      return res.sendStatus(404);
+    }
+
+    if (!body.entry || !Array.isArray(body.entry)) {
+      logger.warn('Invalid webhook entry structure');
+      return res.sendStatus(400);
+    }
+
+    // Process each entry
+    for (const entry of body.entry) {
+      if (!entry.messaging || !Array.isArray(entry.messaging)) {
+        continue;
       }
-    });
+
+      for (const webhook_event of entry.messaging) {
+        if (!webhook_event.sender?.id) {
+          logger.warn('Webhook event missing sender ID');
+          continue;
+        }
+
+        const sender_psid = webhook_event.sender.id;
+        logger.webhook('Event received:', { 
+          from: sender_psid, 
+          type: webhook_event.message ? 'message' : 'other',
+          timestamp: webhook_event.timestamp
+        });
+
+        if (webhook_event.message) {
+          // Handle message asynchronously to avoid blocking webhook response
+          handleMessage(sender_psid, webhook_event.message).catch(error => {
+            logger.error('Error handling message:', error);
+          });
+        }
+      }
+    }
+    
     res.status(200).send('EVENT_RECEIVED');
-  } else {
-    res.sendStatus(404);
+  } catch (error) {
+    logger.error('Webhook processing error:', error);
+    res.status(500).send('INTERNAL_ERROR');
   }
 });
 
@@ -314,4 +466,32 @@ app.get('/webhook', (req, res) => {
       res.sendStatus(403);
     }
   }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    activeSessions: activeSessions.size,
+    memoryUsage: process.memoryUsage()
+  };
+  res.status(200).json(health);
+});
+
+// Status endpoint for debugging
+app.get('/status', (req, res) => {
+  const sessions = Array.from(activeSessions.entries()).map(([userId, session]) => ({
+    userId,
+    startTime: new Date(session.startTime).toISOString(),
+    lastActivity: new Date(session.lastActivity).toISOString(),
+    filters: session.filters
+  }));
+  
+  res.status(200).json({
+    activeSessions: sessions,
+    totalUsers: activeSessions.size,
+    uptime: process.uptime()
+  });
 });
