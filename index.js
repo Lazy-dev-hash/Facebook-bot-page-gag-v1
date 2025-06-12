@@ -9,9 +9,20 @@ import bodyParser from 'body-parser';
 import axios from 'axios';
 import logger from './logger.js';
 
-// Load credentials from .env file
+// Load and validate credentials from .env file
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+
+// Validate required environment variables
+if (!PAGE_ACCESS_TOKEN) {
+  logger.error('❌ PAGE_ACCESS_TOKEN is required! Please set it in your .env file.');
+  process.exit(1);
+}
+
+if (!VERIFY_TOKEN) {
+  logger.error('❌ VERIFY_TOKEN is required! Please set it in your .env file.');
+  process.exit(1);
+}
 
 // ===================================================================================
 // 2. AUTO UPTIME SYSTEM (24/7 ONLINE)
@@ -997,6 +1008,11 @@ async function setupPersistentMenu() {
             type: "postback",
             title: "📊 Bot Status",
             payload: "STATUS"
+          },
+          {
+            type: "postback",
+            title: "⭐ Rate Bot",
+            payload: "RATE"
           }
         ]
       }
@@ -1167,6 +1183,26 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 
     case 'STATUS':
       await statusCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
+      break;
+
+    case 'RATE':
+      await rateCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
+      break;
+
+    case 'RATE_1':
+      await handleRating(senderId, 1);
+      break;
+    case 'RATE_2':
+      await handleRating(senderId, 2);
+      break;
+    case 'RATE_3':
+      await handleRating(senderId, 3);
+      break;
+    case 'RATE_4':
+      await handleRating(senderId, 4);
+      break;
+    case 'RATE_5':
+      await handleRating(senderId, 5);
       break;
 
     default:
@@ -1668,357 +1704,11 @@ Thank you for your feedback!
     }
 }
 
-//Updating the postback handler for the rating
-async function handlePostback(senderId, postback) {
-    logger.info(`🔔 Processing enhanced postback from ${senderId}: "${postback.payload}"`);
 
-    switch (postback.payload) {
-        case 'GET_STARTED':
-            newUsers.delete(senderId);
-            await sendWelcomeMessage(senderId);
-            break;
 
-        case 'HELP':
-            const helpMessage = `╔══════════════════════════════════╗
-║  🤖  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗚𝗮𝗴𝘀𝘁𝗼𝗰𝗸  ║
-║      𝗕𝗼𝘁 𝗛𝗲𝗹𝗽 ✨            ║
-╚══════════════════════════════════╝
 
-✨ 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
 
-╭─ 🌾 Main Commands ─────────────╮
-│ 🟢 gagstock on                │
-│    Start enhanced tracking     │
-│                                │
-│ 🎯 gagstock on [filter]       │
-│    Track specific items        │
-│    Example: Sunflower | Can    │
-│                                │
-│ 🔴 gagstock off               │
-│    Stop tracking gracefully   │
-╰────────────────────────────────╯
 
-╭─ ⚡ Quick Actions ─────────────╮
-│ 🔄 refresh                     │
-│    Force refresh with alerts   │
-│                                │
-│ ⭐ rate                        │
-│    Rate your bot experience    │
-│                                │
-│ 📖 help                        │
-│    Show this enhanced menu     │
-╰────────────────────────────────╯
-
-${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────────╮
-│ 📢 update [message]           │
-│    Send notifications to users │
-│                                │
-│ 🚀 deploy [commit msg]        │
-│    Deploy new code changes     │
-│                                │
-│ 📊 status                      │
-│    View enhanced bot stats     │
-│                                │
-│ 📸 changeprofile [url]        │
-│    Update bot profile picture  │
-│                                │
-│ 🌐 activestatus [on/off]      │
-│    Set bot online/offline      │
-╰────────────────────────────────╯` : ''}
-
-╭─ 🌟 Enhanced Features ─────────╮
-│ 🤖 Version: ${systemVersion} (Latest)      │
-│ 🌐 Auto-uptime: 24/7 Active   │
-│ 🎨 Premium aesthetics enabled │
-│ 🔄 Smart cache management     │
-│ ✨ Beautiful notifications    │
-╰────────────────────────────────╯
-
-💫 Enhanced & ready to serve! 🚀`;
-            await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
-            break;
-
-        case 'REFRESH':
-            await refreshCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
-            break;
-
-        case 'STATUS':
-            await statusCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
-            break;
-        case 'RATE_1':
-            await handleRating(senderId, 1);
-            break;
-        case 'RATE_2':
-            await handleRating(senderId, 2);
-            break;
-        case 'RATE_3':
-            await handleRating(senderId, 3);
-            break;
-        case 'RATE_4':
-            await handleRating(senderId, 4);
-            break;
-        case 'RATE_5':
-            await handleRating(senderId, 5);
-            break;
-        default:
-            logger.warn(`❓ Unknown enhanced postback payload: ${postback.payload}`);
-    }
-}
-
-//Modifying the handle message to include the rate command
-async function handleMessage(senderId, message) {
-    if (!message.text) return;
-
-    // Check if this is a new user
-    if (newUsers.has(senderId)) {
-        newUsers.delete(senderId);
-        await sendWelcomeMessage(senderId);
-        return;
-    }
-
-    // Enhanced rate limiting
-    if (isRateLimited(senderId)) {
-        logger.warn(`⏰ Rate limited user: ${senderId}`);
-        const rateLimitMessage = `╔══════════════════════════════════╗
-║  ⏰  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗥𝗮𝘁𝗲 ║
-║      𝗟𝗶𝗺𝗶𝘁 𝗔𝗰𝘁𝗶𝘃𝗲! 🚦      ║
-╚══════════════════════════════════╝
-
-🏃‍♂️ Whoa there, speedy explorer!
-
-You're sending messages a bit too 
-quickly for our enhanced systems.
-
-╭─ 🌱 Take a Moment ────────────╮
-│ ⏰ Wait: Just a few seconds    │
-│ 🧘 Relax: Quality over speed   │
-│ ✨ Enhanced: Better experience │
-│ 💚 Patience: Worth the wait    │
-╰────────────────────────────────╯
-
-🌟 Enhanced features work best 
-   with mindful interaction! ✨`;
-        await sendMessage(senderId, { text: rateLimitMessage }, PAGE_ACCESS_TOKEN);
-        return;
-    }
-
-    logger.info(`💬 Processing enhanced message from ${senderId}: "${message.text}"`);
-    const text = message.text.trim();
-
-    // Enhanced update responses
-    if (pendingUpdates.has(senderId)) {
-        if (text.toLowerCase() === 'apply') {
-            pendingUpdates.delete(senderId);
-            const applyMessage = `╔══════════════════════════════════╗
-║  ✅  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗨𝗽𝗱𝗮𝘁𝗲  ║
-║      𝗔𝗽𝗽𝗹𝗶𝗲𝗱! 🎊            ║
-╚══════════════════════════════════╝
-
-🎉 Update successfully installed 
-   with enhanced features!
-
-╭─ ✨ What's New ───────────────╮
-│ 🎨 Enhanced aesthetics        │
-│ 🔄 Improved performance       │
-│ 🌟 New premium features       │
-│ 🚀 Faster response times      │
-│ 💚 Better user experience     │
-╰────────────────────────────────╯
-
-Your enhanced bot is now running 
-the latest version with all new 
-capabilities and improvements!
-
-🌱 Thank you for updating! ✨💚`;
-            await sendMessage(senderId, { text: applyMessage }, PAGE_ACCESS_TOKEN);
-            return;
-        } else if (text.toLowerCase() === 'skip') {
-            pendingUpdates.delete(senderId);
-            const skipMessage = `╔══════════════════════════════════╗
-║  ⏭️   𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗨𝗽𝗱𝗮𝘁𝗲 ║
-║       𝗦𝗸𝗶𝗽𝗽𝗲𝗱! 📋           ║
-╚══════════════════════════════════╝
-
-📝 Update skipped for now, no worries!
-
-╭─ 💫 Your Choice Respected ────╮
-│ ✅ Current version: Working    │
-│ 🔄 Future updates: Available   │
-│ 📞 Admin contact: Anytime     │
-│ 🌱 Continue: As normal        │
-╰────────────────────────────────╯
-
-You can always apply enhanced 
-updates later by asking the admin!
-
-🌟 Enjoy your current experience! ✨`;
-            await sendMessage(senderId, { text: skipMessage }, PAGE_ACCESS_TOKEN);
-            return;
-        }
-    }
-
-    const args = text.split(/\s+/);
-    const commandName = args.shift().toLowerCase();
-    const command = commands.get(commandName);
-
-    if (command) {
-        try {
-            await command.execute(senderId, args, PAGE_ACCESS_TOKEN);
-        } catch (error) {
-            logger.error(`❌ Error executing enhanced command '${commandName}' for user ${senderId}:`, error);
-            const errorMessage = `╔══════════════════════════════════╗
-║  😥  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗦𝘆𝘀𝘁𝗲𝗺  ║
-║      𝗘𝗿𝗿𝗼𝗿 𝗗𝗲𝘁𝗲𝗰𝘁𝗲𝗱! 🛠️     ║
-╚══════════════════════════════════╝
-
-😔 Something unexpected happened 
-   in our enhanced system.
-
-╭─ 🔧 Auto-Recovery Active ─────╮
-│ 🔄 Trying to fix automatically │
-│ 💻 Developer has been notified │
-│ ⏰ Usually resolves quickly    │
-│ 🌟 Enhanced stability enabled  │
-╰────────────────────────────────╯
-
-🌱 Please try again in a moment!
-   Our enhanced system is self-healing! ✨`;
-            await sendMessage(senderId, { text: errorMessage }, PAGE_ACCESS_TOKEN);
-        }
-    } else {
-        if (commandName === 'help') {
-            const helpMessage = `╔══════════════════════════════════╗
-║  🤖  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗚𝗮𝗴𝘀𝘁𝗼𝗰𝗸  ║
-║      𝗕𝗼𝘁 𝗛𝗲𝗹𝗽 ✨            ║
-╚══════════════════════════════════╝
-
-✨ 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
-
-╭─ 🌾 Main Commands ─────────────╮
-│ 🟢 gagstock on                │
-│    Start enhanced tracking     │
-│                                │
-│ 🎯 gagstock on [filter]       │
-│    Track specific items        │
-│    Example: Sunflower | Can    │
-│                                │
-│ 🔴 gagstock off               │
-│    Stop tracking gracefully   │
-╰────────────────────────────────╯
-
-╭─ ⚡ Quick Actions ─────────────╮
-│ 🔄 refresh                     │
-│    Force refresh with alerts   │
-│                                │
-│ ⭐ rate                        │
-│    Rate your bot experience    │
-│                                │
-│ 📖 help                        │
-│    Show this enhanced menu     │
-╰────────────────────────────────╯
-
-${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────────╮
-│ 📢 update [message]           │
-│    Send notifications to users │
-│                                │
-│ 🚀 deploy [commit msg]        │
-│    Deploy new code changes     │
-│                                │
-│ 📊 status                      │
-│    View enhanced bot stats     │
-│                                │
-│ 📸 changeprofile [url]        │
-│    Update bot profile picture  │
-│                                │
-│ 🌐 activestatus [on/off]      │
-│    Set bot online/offline      │
-╰────────────────────────────────╯` : ''}
-
-╭─ 🌟 Enhanced Features ─────────╮
-│ 🤖 Version: ${systemVersion} (Latest)      │
-│ 🌐 Auto-uptime: 24/7 Active   │
-│ 🎨 Premium aesthetics enabled │
-│ 🔄 Smart cache management     │
-│ ✨ Beautiful notifications    │
-╰────────────────────────────────╯
-
-💫 Enhanced & ready to serve! 🚀`;
-            await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
-        } else if (commandName === 'rate') {
-            await rateCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
-        }
-        else {
-            logger.warn(`❓ Enhanced command not found: '${commandName}' from user ${senderId}`);
-            const unknownMessage = `╔══════════════════════════════════╗
-║  ❓  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗖𝗼𝗺𝗺𝗮𝗻𝗱  ║
-║      𝗡𝗼𝘁 𝗥𝗲𝗰𝗼𝗴𝗻𝗶𝘇𝗲𝗱! 🤔       ║
-╚══════════════════════════════════╝
-
-🤖 Command '${commandName}' not found in 
-   our enhanced system.
-
-╭─ 💡 Helpful Suggestions ──────╮
-│ 📖 Type 'help' - See all cmds │
-│ 🌱 Try 'gagstock on' - Start  │
-│ 🔄 Use 'refresh' - Update now │
-│ ✨ Enhanced features available │
-╰────────────────────────────────╯
-
-🌟 I'm here to help you track
-   Grow A Garden stock beautifully! 💚`;
-            await sendMessage(senderId, { text: unknownMessage }, PAGE_ACCESS_TOKEN);
-        }
-    }
-}
-
-// Enhanced persistent menu setup
-async function setupPersistentMenu() {
-    const menuData = {
-        persistent_menu: [
-            {
-                locale: "default",
-                composer_input_disabled: false,
-                call_to_actions: [
-                    {
-                        type: "postback",
-                        title: "🌱 Get Started",
-                        payload: "GET_STARTED"
-                    },
-                    {
-                        type: "postback",
-                        title: "📖 Help & Commands",
-                        payload: "HELP"
-                    },
-                    {
-                        type: "postback",
-                        title: "🔄 Refresh Stock",
-                        payload: "REFRESH"
-                    },
-                    {
-                        type: "postback",
-                        title: "📊 Bot Status",
-                        payload: "STATUS"
-                    },
-                    {
-                        type: "postback",
-                        title: "⭐ Rate Bot",
-                        payload: "RATE"
-                    }
-                ]
-            }
-        ]
-    };
-
-    try {
-        await axios.post('https://graph.facebook.com/v19.0/me/messenger_profile', menuData, {
-            params: { access_token: PAGE_ACCESS_TOKEN },
-            timeout: 10000
-        });
-        logger.success('✨ Enhanced persistent menu set up successfully');
-    } catch (error) {
-        logger.error('❌ Failed to set up persistent menu:', error.message);
-    }
-}
 
 logger.banner('🌟 Enhanced GagStock Bot v3.0.0', 'Premium features activated & ready to serve!');
 
