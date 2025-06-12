@@ -166,26 +166,72 @@ const gagstockCommand = {
             activeSessions.delete(senderId);
             lastSentCache.delete(senderId);
             logger.info(`Gagstock tracking stopped for user: ${senderId}`);
-            return await sendMessage(senderId, { text: "🛑 Gagstock tracking stopped." }, pageAccessToken);
+            const stopMessage = `╭─────────────────────────╮
+│  🛑  𝗧𝗿𝗮𝗰𝗸𝗶𝗻𝗴 𝗦𝘁𝗼𝗽𝗽𝗲𝗱  │
+╰─────────────────────────╯
+Your Gagstock tracking has been 
+successfully disabled. 
+
+Thank you for using our service! 🌱`;
+            return await sendMessage(senderId, { text: stopMessage }, pageAccessToken);
         } else {
-            return await sendMessage(senderId, { text: "⚠️ You don't have an active gagstock session." }, pageAccessToken);
+            const noSessionMessage = `╭─────────────────────────╮
+│  ⚠️   𝗡𝗼 𝗔𝗰𝘁𝗶𝘃𝗲 𝗦𝗲𝘀𝘀𝗶𝗼𝗻  │
+╰─────────────────────────╯
+You don't have an active gagstock 
+tracking session running.
+
+Use 'gagstock on' to start! 🚀`;
+            return await sendMessage(senderId, { text: noSessionMessage }, pageAccessToken);
         }
     }
 
     if (action !== "on") {
-        return await sendMessage(senderId, {
-            text: "📌 Usage:\n• gagstock on\n• gagstock on Sunflower | Watering Can\n• gagstock off",
-        }, pageAccessToken);
+        const usageMessage = `╭───────────────────────────╮
+│  📖  𝗚𝗮𝗴𝘀𝘁𝗼𝗰𝗸 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀  │
+╰───────────────────────────╯
+
+✨ 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
+
+🟢 gagstock on
+   Start tracking all items
+
+🎯 gagstock on Sunflower | Watering Can
+   Track specific items only
+
+🔴 gagstock off  
+   Stop tracking
+
+Need help? Just ask! 💫`;
+        return await sendMessage(senderId, { text: usageMessage }, pageAccessToken);
     }
 
     if (activeSessions.has(senderId)) {
         logger.warn(`User ${senderId} tried to start an existing session.`);
-        return await sendMessage(senderId, {
-            text: "📡 You're already tracking Gagstock. Use gagstock off to stop.",
-        }, pageAccessToken);
+        const alreadyActiveMessage = `╭─────────────────────────────╮
+│  📡  𝗔𝗹𝗿𝗲𝗮𝗱𝘆 𝗔𝗰𝘁𝗶𝘃𝗲  │
+╰─────────────────────────────╯
+You're already tracking Gagstock! 
+
+Use 'gagstock off' to stop first,
+then start a new session. 🔄`;
+        return await sendMessage(senderId, { text: alreadyActiveMessage }, pageAccessToken);
     }
 
-    await sendMessage(senderId, { text: "✅ Gagstock tracking started! You'll be notified when stock or weather changes." }, pageAccessToken);
+    const startMessage = `╭─────────────────────────────╮
+│  ✨  𝗧𝗿𝗮𝗰𝗸𝗶𝗻𝗴 𝗦𝘁𝗮𝗿𝘁𝗲𝗱!  │
+╰─────────────────────────────╯
+🎉 Gagstock tracking is now active!
+
+You'll receive beautiful updates when:
+🔄 Stock levels change
+🌤️ Weather conditions update
+⏰ Restock timers tick down
+
+${filters.length > 0 ? `🎯 Filtering for: ${filters.join(', ')}` : '📊 Tracking all items'}
+
+Sit back and let us do the work! 🌱`;
+    await sendMessage(senderId, { text: startMessage }, pageAccessToken);
     logger.info(`Gagstock tracking started for user: ${senderId} with filters:`, filters.length > 0 ? filters : 'none');
 
     async function fetchAndNotify(alwaysSend = false) {
@@ -209,7 +255,7 @@ const gagstockCommand = {
           updatedAt: weatherRes.data.updatedAt || new Date().toISOString(),
         };
         const restocks = getNextRestocks();
-        const formatList = (arr) => arr.map(i => `- ${addEmoji(i.name)}: ${formatValue(i.value)}`).join("\n");
+        const formatList = (arr) => arr.map(i => `  ├─ ${addEmoji(i.name)}: ${formatValue(i.value)}`).join("\n");
         const updatedAtPH = getPHTime().toLocaleString("en-PH", {
           hour: "numeric", minute: "numeric", second: "numeric", hour12: true, day: "2-digit", month: "short", year: "numeric"
         });
@@ -222,7 +268,12 @@ const gagstockCommand = {
             }
             if (filtered.length > 0) {
                 if (isFilterable) matchedItems = true;
-                return `${label}:\n${formatList(filtered)}\n⏳ Restock In: ${restock}\n\n`;
+                return `╭─ ${label} ─────────────────╮
+${formatList(filtered)}
+  └─ ⏰ Restock: ${restock}
+╰─────────────────────────────╯
+
+`;
             }
             return "";
         };
@@ -247,7 +298,25 @@ const gagstockCommand = {
         if (!alwaysSend && lastSent === currentKey) return false;
         if (filters.length > 0 && !matchedItems) return false;
         lastSentCache.set(senderId, currentKey);
-        const message = `🌾 𝗚𝗿𝗼𝘄 𝗔 𝗚𝗮𝗿𝗱𝗲𝗻 — 𝗧𝗿𝗮𝗰𝗸𝗲𝗿\n\n${filteredContent}🌤️ 𝗪𝗲𝗮𝘁𝗵𝗲𝗿: ${weather.icon} ${weather.currentWeather}\n🌾 Crop Bonus: ${weather.cropBonuses}\n📅 Updated at (Philippines): ${updatedAtPH}`;
+        
+        const headerDesign = `╔══════════════════════════════════╗
+║   🌾 𝗚𝗿𝗼𝘄 𝗔 𝗚𝗮𝗿𝗱𝗲𝗻 𝗦𝘁𝗼𝗰𝗸   ║
+╚══════════════════════════════════╝
+
+`;
+        
+        const weatherSection = `╭─ 🌤️ 𝗪𝗲𝗮𝘁𝗵𝗲𝗿 𝗜𝗻𝗳𝗼 ─────────╮
+  ├─ Current: ${weather.icon} ${weather.currentWeather}
+  └─ Bonus: 🌾 ${weather.cropBonuses}
+╰─────────────────────────────╯
+
+`;
+        
+        const footerSection = `╭─ 📊 𝗟𝗮𝘀𝘁 𝗨𝗽𝗱𝗮𝘁𝗲 ─────────╮
+  └─ 📅 ${updatedAtPH}
+╰─────────────────────────────╯`;
+        
+        const message = `${headerDesign}${filteredContent}${weatherSection}${footerSection}`;
         await sendMessage(senderId, { text: message }, pageAccessToken);
         return true;
       } catch (err) {
@@ -284,7 +353,16 @@ const gagstockCommand = {
     if(firstFetchSuccess) {
       runSchedule();
     } else {
-      await sendMessage(senderId, { text: "❌ Failed to fetch initial stock data. Please try again later." }, pageAccessToken);
+      const fetchErrorMessage = `╭─────────────────────────────╮
+│  ❌  𝗖𝗼𝗻𝗻𝗲𝗰𝘁𝗶𝗼𝗻 𝗜𝘀𝘀𝘂𝗲  │
+╰─────────────────────────────╯
+Unable to fetch the initial stock 
+data from Grow A Garden servers.
+
+🔄 This is usually temporary
+⏰ Please try again in a few moments
+🌱 The servers might be busy!`;
+      await sendMessage(senderId, { text: fetchErrorMessage }, pageAccessToken);
       activeSessions.delete(senderId);
     }
   }
@@ -323,9 +401,17 @@ async function handleMessage(senderId, message) {
   // Rate limiting check
   if (isRateLimited(senderId)) {
     logger.warn(`Rate limited user: ${senderId}`);
-    await sendMessage(senderId, { 
-      text: "⏰ You're sending messages too quickly. Please wait a moment before trying again." 
-    }, PAGE_ACCESS_TOKEN);
+    const rateLimitMessage = `╭─────────────────────────────╮
+│  ⏰  𝗥𝗮𝘁𝗲 𝗟𝗶𝗺𝗶𝘁 𝗥𝗲𝗮𝗰𝗵𝗲𝗱  │
+╰─────────────────────────────╯
+Whoa there, speedy! 🏃‍♂️
+
+You're sending messages a bit too 
+quickly. Please take a short break 
+and try again in a moment.
+
+🌱 Quality over quantity! ✨`;
+    await sendMessage(senderId, { text: rateLimitMessage }, PAGE_ACCESS_TOKEN);
     return;
   }
   
@@ -340,19 +426,58 @@ async function handleMessage(senderId, message) {
       await command.execute(senderId, args, PAGE_ACCESS_TOKEN);
     } catch (error) {
       logger.error(`Error executing command '${commandName}' for user ${senderId}:`, error);
-      await sendMessage(senderId, { text: "😥 Oops! Something went wrong while running that command." }, PAGE_ACCESS_TOKEN);
+      const errorMessage = `╭─────────────────────────────╮
+│  😥  𝗢𝗼𝗽𝘀! 𝗦𝗼𝗺𝗲𝘁𝗵𝗶𝗻𝗴 𝗪𝗲𝗻𝘁 │
+│      𝗪𝗿𝗼𝗻𝗴!                │
+╰─────────────────────────────╯
+Something unexpected happened 
+while processing your command.
+
+🔧 Please try again in a moment
+💫 If the issue persists, the 
+   developer has been notified!`;
+      await sendMessage(senderId, { text: errorMessage }, PAGE_ACCESS_TOKEN);
     }
   } else {
     // Add help command suggestion
     if (commandName === 'help') {
-      await sendMessage(senderId, { 
-        text: "🤖 Available commands:\n• gagstock on - Start tracking\n• gagstock on [filter] - Track specific items\n• gagstock off - Stop tracking" 
-      }, PAGE_ACCESS_TOKEN);
+      const helpMessage = `╔══════════════════════════════════╗
+║  🤖  𝗚𝗮𝗴𝘀𝘁𝗼𝗰𝗸 𝗕𝗼𝘁 𝗛𝗲𝗹𝗽  ║
+╚══════════════════════════════════╝
+
+✨ 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
+
+╭─────────────────────────────╮
+│ 🟢 gagstock on             │
+│    Start tracking all items │
+╰─────────────────────────────╯
+
+╭─────────────────────────────╮
+│ 🎯 gagstock on [filter]    │
+│    Track specific items     │
+│    Example: Sunflower | Can │
+╰─────────────────────────────╯
+
+╭─────────────────────────────╮
+│ 🔴 gagstock off            │
+│    Stop tracking            │
+╰─────────────────────────────╯
+
+💫 Need more help? Just ask!`;
+      await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
     } else {
       logger.warn(`Command not found: '${commandName}' from user ${senderId}`);
-      await sendMessage(senderId, { 
-        text: `❓ Unknown command '${commandName}'. Type 'help' for available commands.` 
-      }, PAGE_ACCESS_TOKEN);
+      const unknownMessage = `╭─────────────────────────────╮
+│  ❓  𝗨𝗻𝗸𝗻𝗼𝘄𝗻 𝗖𝗼𝗺𝗺𝗮𝗻𝗱  │
+╰─────────────────────────────╯
+Command '${commandName}' not found.
+
+💡 Try typing 'help' to see all 
+   available commands!
+
+🌱 I'm here to help you track
+   Grow A Garden stock!`;
+      await sendMessage(senderId, { text: unknownMessage }, PAGE_ACCESS_TOKEN);
     }
   }
 }
