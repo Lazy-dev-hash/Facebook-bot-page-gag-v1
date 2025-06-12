@@ -64,6 +64,11 @@ const lastSentCache = new Map();
 const userRateLimit = new Map(); // Rate limiting per user
 const MAX_REQUESTS_PER_MINUTE = 10;
 
+// Admin and update system
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Set this in your Replit secrets
+const pendingUpdates = new Map(); // Store pending updates for users
+const systemVersion = "2.0.0"; // Current bot version
+
 // Clean up inactive sessions every 30 minutes
 setInterval(() => {
   const now = Date.now();
@@ -92,24 +97,40 @@ function getCountdown(target) {
 function getNextRestocks() {
   const now = getPHTime();
   const timers = {};
+  
+  // Eggs restock every 30 minutes (XX:00 and XX:30)
   const nextEgg = new Date(now);
   nextEgg.setMinutes(now.getMinutes() < 30 ? 30 : 0);
   if (now.getMinutes() >= 30) nextEgg.setHours(now.getHours() + 1);
   nextEgg.setSeconds(0, 0);
   timers.egg = getCountdown(nextEgg);
-  const next5 = new Date(now);
-  const nextM = Math.ceil((now.getMinutes() + (now.getSeconds() > 0 ? 1 : 0)) / 5) * 5;
-  next5.setMinutes(nextM === 60 ? 0 : nextM, 0, 0);
-  if (nextM === 60) next5.setHours(now.getHours() + 1);
-  timers.gear = timers.seed = getCountdown(next5);
+  
+  // Gear restocks every 5 minutes
+  const nextGear = new Date(now);
+  const nextGearM = Math.ceil((now.getMinutes() + (now.getSeconds() > 0 ? 1 : 0)) / 5) * 5;
+  nextGear.setMinutes(nextGearM === 60 ? 0 : nextGearM, 0, 0);
+  if (nextGearM === 60) nextGear.setHours(now.getHours() + 1);
+  timers.gear = getCountdown(nextGear);
+  
+  // Seeds restock every 3 minutes
+  const nextSeed = new Date(now);
+  const nextSeedM = Math.ceil((now.getMinutes() + (now.getSeconds() > 0 ? 1 : 0)) / 3) * 3;
+  nextSeed.setMinutes(nextSeedM === 60 ? 0 : nextSeedM, 0, 0);
+  if (nextSeedM === 60) nextSeed.setHours(now.getHours() + 1);
+  timers.seed = getCountdown(nextSeed);
+  
+  // Honey restocks every hour
   const nextHour = new Date(now);
   nextHour.setHours(now.getHours() + 1, 0, 0, 0);
   timers.honey = getCountdown(nextHour);
+  
+  // Cosmetics restock every 7 hours
   const next7 = new Date(now);
   const totalHours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
   const next7h = Math.ceil(totalHours / 7) * 7;
   next7.setHours(next7h, 0, 0, 0);
   timers.cosmetics = getCountdown(next7);
+  
   return timers;
 }
 function getNextScheduledTime(startTime = getPHTime()) {
@@ -148,6 +169,189 @@ async function fetchWithTimeout(url, options = {}, timeout = 5000) {
     throw error;
   }
 }
+
+// Admin Update Command
+const updateCommand = {
+  name: "update",
+  aliases: ["upgrade"],
+  description: "Admin command to push updates to all users",
+  usage: "update [message]",
+  category: "Admin 👑",
+  async execute(senderId, args, pageAccessToken) {
+    if (senderId !== ADMIN_USER_ID) {
+      const unauthorizedMessage = `╭─────────────────────────────╮
+│  🚫  𝗔𝗰𝗰𝗲𝘀𝘀 𝗗𝗲𝗻𝗶𝗲𝗱  │
+╰─────────────────────────────╯
+This command is reserved for 
+bot administrators only.
+
+🌱 Continue using gagstock normally!`;
+      return await sendMessage(senderId, { text: unauthorizedMessage }, pageAccessToken);
+    }
+
+    const updateMessage = args.join(" ") || "System update available with new features and improvements!";
+    
+    // Send update to all active users
+    for (const userId of activeSessions.keys()) {
+      if (userId !== ADMIN_USER_ID) {
+        pendingUpdates.set(userId, {
+          message: updateMessage,
+          version: systemVersion,
+          timestamp: Date.now()
+        });
+        
+        const updateNotification = `╔══════════════════════════════════╗
+║  🚀  𝗦𝘆𝘀𝘁𝗲𝗺 𝗨𝗽𝗱𝗮𝘁𝗲 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲  ║
+╚══════════════════════════════════╝
+
+✨ New Update Available! ✨
+
+${updateMessage}
+
+╭─────────────────────────────╮
+│ 📦 Version: ${systemVersion}           │
+│ 🛠️ Ready to install         │
+╰─────────────────────────────╯
+
+Reply 'apply' to install the update
+Reply 'skip' to continue without updating
+
+🌟 New features await you!`;
+        await sendMessage(userId, { text: updateNotification }, pageAccessToken);
+      }
+    }
+    
+    const adminConfirmation = `╭─────────────────────────────╮
+│  ✅  𝗨𝗽𝗱𝗮𝘁𝗲 𝗗𝗲𝗽𝗹𝗼𝘆𝗲𝗱  │
+╰─────────────────────────────╯
+Update notification sent to 
+${activeSessions.size - 1} active users.
+
+📊 System Status: Ready
+🚀 Version: ${systemVersion}`;
+    await sendMessage(senderId, { text: adminConfirmation }, pageAccessToken);
+  }
+};
+
+// Refresh Command
+const refreshCommand = {
+  name: "refresh",
+  aliases: ["reload", "sync"],
+  description: "Force refresh all stock data",
+  usage: "refresh",
+  category: "Tools ⚒️",
+  async execute(senderId, args, pageAccessToken) {
+    const session = activeSessions.get(senderId);
+    if (!session) {
+      const noSessionMessage = `╭─────────────────────────────╮
+│  ⚠️   𝗡𝗼 𝗔𝗰𝘁𝗶𝘃𝗲 𝗦𝗲𝘀𝘀𝗶𝗼𝗻  │
+╰─────────────────────────────╯
+You need to start gagstock tracking
+first before refreshing.
+
+Use 'gagstock on' to start! 🚀`;
+      return await sendMessage(senderId, { text: noSessionMessage }, pageAccessToken);
+    }
+
+    const refreshingMessage = `╭─────────────────────────────╮
+│  🔄  𝗥𝗲𝗳𝗿𝗲𝘀𝗵𝗶𝗻𝗴 𝗦𝘁𝗼𝗰𝗸  │
+╰─────────────────────────────╯
+🔄 Fetching latest stock data...
+⚡ This may take a moment...
+
+Please wait while we refresh! ✨`;
+    await sendMessage(senderId, { text: refreshingMessage }, pageAccessToken);
+
+    try {
+      // Force clear cache and fetch new data
+      lastSentCache.delete(senderId);
+      
+      const [stockRes, weatherRes] = await Promise.all([
+        fetchWithTimeout("https://gagstock.gleeze.com/grow-a-garden"),
+        fetchWithTimeout("https://growagardenstock.com/api/stock/weather"),
+      ]);
+      
+      // Same fetch logic as in gagstock command...
+      const backup = stockRes.data.data;
+      const stockData = {
+        gearStock: backup.gear.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
+        seedsStock: backup.seed.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
+        eggStock: backup.egg.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
+        cosmeticsStock: backup.cosmetics.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
+        honeyStock: backup.honey.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
+      };
+      
+      const weather = {
+        currentWeather: weatherRes.data.currentWeather || "Unknown",
+        icon: weatherRes.data.icon || "🌤️",
+        cropBonuses: weatherRes.data.cropBonuses || "None",
+        updatedAt: weatherRes.data.updatedAt || new Date().toISOString(),
+      };
+      
+      const restocks = getNextRestocks();
+      const formatList = (arr) => arr.map(i => `  ├─ ${addEmoji(i.name)}: ${formatValue(i.value)}`).join("\n");
+      const updatedAtPH = getPHTime().toLocaleString("en-PH", {
+        hour: "numeric", minute: "numeric", second: "numeric", hour12: true, day: "2-digit", month: "short", year: "numeric"
+      });
+
+      const filters = session.filters || [];
+      let filteredContent = "";
+      
+      const processSection = (label, items, restock) => {
+        let filtered = items;
+        if (filters.length > 0) {
+          filtered = items.filter(i => filters.some(f => i.name.toLowerCase().includes(f)));
+        }
+        if (filtered.length > 0 || filters.length === 0) {
+          return `╭─ ${label} ─────────────────╮
+${formatList(filters.length > 0 ? filtered : items)}
+  └─ ⏰ Restock: ${restock}
+╰─────────────────────────────╯
+
+`;
+        }
+        return "";
+      };
+
+      filteredContent += processSection("🛠️ 𝗚𝗲𝗮𝗿", stockData.gearStock, restocks.gear);
+      filteredContent += processSection("🌱 𝗦𝗲𝗲𝗱𝘀", stockData.seedsStock, restocks.seed);
+      filteredContent += processSection("🥚 𝗘𝗴𝗴𝘀", stockData.eggStock, restocks.egg);
+      filteredContent += processSection("🎨 𝗖𝗼𝘀𝗺𝗲𝘁𝗶𝗰𝘀", stockData.cosmeticsStock, restocks.cosmetics);
+      filteredContent += processSection("🍯 𝗛𝗼𝗻𝗲𝘆", stockData.honeyStock, restocks.honey);
+
+      const refreshSuccessHeader = `╔══════════════════════════════════╗
+║   🔄 𝗦𝘁𝗼𝗰𝗸 𝗥𝗲𝗳𝗿𝗲𝘀𝗵𝗲𝗱!     ║
+╚══════════════════════════════════╝
+
+`;
+      
+      const weatherSection = `╭─ 🌤️ 𝗪𝗲𝗮𝘁𝗵𝗲𝗿 𝗜𝗻𝗳𝗼 ─────────╮
+  ├─ Current: ${weather.icon} ${weather.currentWeather}
+  └─ Bonus: 🌾 ${weather.cropBonuses}
+╰─────────────────────────────╯
+
+`;
+      
+      const footerSection = `╭─ 📊 𝗙𝗿𝗲𝘀𝗵 𝗗𝗮𝘁𝗮 ──────────╮
+  └─ 📅 ${updatedAtPH}
+╰─────────────────────────────╯`;
+      
+      const message = `${refreshSuccessHeader}${filteredContent}${weatherSection}${footerSection}`;
+      await sendMessage(senderId, { text: message }, pageAccessToken);
+      
+    } catch (error) {
+      const errorMessage = `╭─────────────────────────────╮
+│  ❌  𝗥𝗲𝗳𝗿𝗲𝘀𝗵 𝗙𝗮𝗶𝗹𝗲𝗱  │
+╰─────────────────────────────╯
+Unable to refresh stock data 
+at this moment.
+
+🔄 Please try again later
+📡 The servers might be busy!`;
+      await sendMessage(senderId, { text: errorMessage }, pageAccessToken);
+    }
+  }
+};
 
 const gagstockCommand = {
   name: "gagstock",
@@ -316,7 +520,28 @@ ${formatList(filtered)}
   └─ 📅 ${updatedAtPH}
 ╰─────────────────────────────╯`;
         
-        const message = `${headerDesign}${filteredContent}${weatherSection}${footerSection}`;
+        // Get user's name for personalized greeting
+        let userName = "Friend";
+        try {
+          const userInfoResponse = await axios.get(`https://graph.facebook.com/v19.0/${senderId}`, {
+            params: { 
+              fields: 'first_name',
+              access_token: pageAccessToken 
+            },
+            timeout: 5000
+          });
+          userName = userInfoResponse.data.first_name || "Friend";
+        } catch (error) {
+          logger.debug("Could not fetch user name:", error.message);
+        }
+
+        const personalizedHeader = `╔══════════════════════════════════╗
+║   🌾 Hi ${userName}! Stock Updated! 🌟   ║
+╚══════════════════════════════════╝
+
+`;
+        
+        const message = `${personalizedHeader}${filteredContent}${weatherSection}${footerSection}`;
         await sendMessage(senderId, { text: message }, pageAccessToken);
         return true;
       } catch (err) {
@@ -374,9 +599,21 @@ data from Grow A Garden servers.
 // ===================================================================================
 
 const commands = new Map();
+
+// Register all commands
 commands.set(gagstockCommand.name, gagstockCommand);
 if (gagstockCommand.aliases) {
     gagstockCommand.aliases.forEach(alias => commands.set(alias, gagstockCommand));
+}
+
+commands.set(updateCommand.name, updateCommand);
+if (updateCommand.aliases) {
+    updateCommand.aliases.forEach(alias => commands.set(alias, updateCommand));
+}
+
+commands.set(refreshCommand.name, refreshCommand);
+if (refreshCommand.aliases) {
+    refreshCommand.aliases.forEach(alias => commands.set(alias, refreshCommand));
 }
 
 function isRateLimited(userId) {
@@ -417,6 +654,42 @@ and try again in a moment.
   
   logger.info(`Processing message from ${senderId}: "${message.text}"`);
   const text = message.text.trim();
+  
+  // Check for update responses
+  if (pendingUpdates.has(senderId)) {
+    if (text.toLowerCase() === 'apply') {
+      pendingUpdates.delete(senderId);
+      const applyMessage = `╭─────────────────────────────╮
+│  ✅  𝗨𝗽𝗱𝗮𝘁𝗲 𝗔𝗽𝗽𝗹𝗶𝗲𝗱!  │
+╰─────────────────────────────╯
+🎉 Update successfully installed!
+
+Your bot is now running the latest
+version with all new features.
+
+✨ Enhanced performance
+🌟 New capabilities 
+🚀 Ready to use!
+
+Thank you for updating! 🌱`;
+      await sendMessage(senderId, { text: applyMessage }, PAGE_ACCESS_TOKEN);
+      return;
+    } else if (text.toLowerCase() === 'skip') {
+      pendingUpdates.delete(senderId);
+      const skipMessage = `╭─────────────────────────────╮
+│  ⏭️   𝗨𝗽𝗱𝗮𝘁𝗲 𝗦𝗸𝗶𝗽𝗽𝗲𝗱  │
+╰─────────────────────────────╯
+Update skipped for now.
+
+You can always apply updates later
+by asking the admin.
+
+🌱 Continue using your current version!`;
+      await sendMessage(senderId, { text: skipMessage }, PAGE_ACCESS_TOKEN);
+      return;
+    }
+  }
+  
   const args = text.split(/\s+/);
   const commandName = args.shift().toLowerCase();
   const command = commands.get(commandName);
@@ -447,23 +720,32 @@ while processing your command.
 
 ✨ 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
 
-╭─────────────────────────────╮
+╭─ 🌾 Main Commands ─────────╮
 │ 🟢 gagstock on             │
 │    Start tracking all items │
-╰─────────────────────────────╯
-
-╭─────────────────────────────╮
+│                             │
 │ 🎯 gagstock on [filter]    │
 │    Track specific items     │
 │    Example: Sunflower | Can │
-╰─────────────────────────────╯
-
-╭─────────────────────────────╮
+│                             │
 │ 🔴 gagstock off            │
 │    Stop tracking            │
 ╰─────────────────────────────╯
 
-💫 Need more help? Just ask!`;
+╭─ ⚡ Quick Actions ─────────╮
+│ 🔄 refresh                  │
+│    Force refresh stock data │
+│                             │
+│ 📖 help                     │
+│    Show this help menu      │
+╰─────────────────────────────╯
+
+${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────╮
+│ 🚀 update [message]        │
+│    Push updates to users    │
+╰─────────────────────────────╯` : ''}
+
+💫 Version: ${systemVersion} | Ready to help!`;
       await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
     } else {
       logger.warn(`Command not found: '${commandName}' from user ${senderId}`);
