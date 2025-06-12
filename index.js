@@ -763,7 +763,6 @@ ${formatList(filtered)}
             filteredContent += processSection("🛠️ 𝗚𝗲𝗮𝗿 & 𝗧𝗼𝗼𝗹𝘀", stockData.gearStock, restocks.gear, false);
             filteredContent += processSection("🌱 𝗦𝗲𝗲𝗱𝘀 & 𝗣𝗹𝗮𝗻𝘁𝘀", stockData.seedsStock, restocks.seed, false);
             filteredContent += processSection("🥚 𝗘𝗴𝗴𝘀 & 𝗣𝗲𝘁𝘀", stockData.eggStock, restocks.egg, false);
-```text
             filteredContent += processSection("🎨 𝗖𝗼𝘀𝗺𝗲𝘁𝗶𝗰 𝗜𝘁𝗲𝗺𝘀", stockData.cosmeticsStock, restocks.cosmetics, false);
             filteredContent += processSection("🍯 𝗛𝗼𝗻𝗲𝘆 𝗣𝗿𝗼𝗱𝘂𝗰𝘁𝘀", stockData.honeyStock, restocks.honey, false);
             matchedItems = true;
@@ -1142,6 +1141,12 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 │                                │
 │ 📊 status                      │
 │    View enhanced bot stats     │
+│                                │
+│ 📸 changeprofile [url]        │
+│    Update bot profile picture  │
+│                                │
+│ 🌐 activestatus [on/off]      │
+│    Set bot online/offline      │
 ╰────────────────────────────────╯` : ''}
 
 ╭─ 🌟 Enhanced Features ─────────╮
@@ -1330,6 +1335,12 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 │                                │
 │ 📊 status                      │
 │    View enhanced bot stats     │
+│                                │
+│ 📸 changeprofile [url]        │
+│    Update bot profile picture  │
+│                                │
+│ 🌐 activestatus [on/off]      │
+│    Set bot online/offline      │
 ╰────────────────────────────────╯` : ''}
 
 ╭─ 🌟 Enhanced Features ─────────╮
@@ -1693,7 +1704,7 @@ async function handlePostback(senderId, postback) {
 │                                │
 │ ⭐ rate                        │
 │    Rate your bot experience    │
-│                                │```text
+│                                │
 │ 📖 help                        │
 │    Show this enhanced menu     │
 ╰────────────────────────────────╯
@@ -1707,6 +1718,12 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 │                                │
 │ 📊 status                      │
 │    View enhanced bot stats     │
+│                                │
+│ 📸 changeprofile [url]        │
+│    Update bot profile picture  │
+│                                │
+│ 🌐 activestatus [on/off]      │
+│    Set bot online/offline      │
 ╰────────────────────────────────╯` : ''}
 
 ╭─ 🌟 Enhanced Features ─────────╮
@@ -1909,6 +1926,12 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 │                                │
 │ 📊 status                      │
 │    View enhanced bot stats     │
+│                                │
+│ 📸 changeprofile [url]        │
+│    Update bot profile picture  │
+│                                │
+│ 🌐 activestatus [on/off]      │
+│    Set bot online/offline      │
 ╰────────────────────────────────╯` : ''}
 
 ╭─ 🌟 Enhanced Features ─────────╮
@@ -1998,3 +2021,9 @@ async function setupPersistentMenu() {
 }
 
 logger.banner('🌟 Enhanced GagStock Bot v3.0.0', 'Premium features activated & ready to serve!');
+
+// Beautiful signature
+logger.success('🌸 ═══════════════════════════════════════════════════════════ 🌸');
+logger.success('✨                    𝓓𝓮𝓿𝓮𝓵𝓸𝓹 𝓫𝔂 𝓢𝓤𝓝𝓝𝓔𝓛                      ✨');
+logger.success('💫                 Enhanced with Love & Aesthetics                💫');
+logger.success('🌸 ═══════════════════════════════════════════════════════════ 🌸');
