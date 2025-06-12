@@ -98,40 +98,40 @@ function getCountdown(target) {
 function getNextRestocks() {
   const now = getPHTime();
   const timers = {};
-  
+
   // Eggs restock every 30 minutes (XX:00 and XX:30)
   const nextEgg = new Date(now);
   nextEgg.setMinutes(now.getMinutes() < 30 ? 30 : 0);
   if (now.getMinutes() >= 30) nextEgg.setHours(now.getHours() + 1);
   nextEgg.setSeconds(0, 0);
   timers.egg = getCountdown(nextEgg);
-  
+
   // Gear restocks every 5 minutes
   const nextGear = new Date(now);
   const nextGearM = Math.ceil((now.getMinutes() + (now.getSeconds() > 0 ? 1 : 0)) / 5) * 5;
   nextGear.setMinutes(nextGearM === 60 ? 0 : nextGearM, 0, 0);
   if (nextGearM === 60) nextGear.setHours(now.getHours() + 1);
   timers.gear = getCountdown(nextGear);
-  
+
   // Seeds restock every 3 minutes
   const nextSeed = new Date(now);
   const nextSeedM = Math.ceil((now.getMinutes() + (now.getSeconds() > 0 ? 1 : 0)) / 3) * 3;
   nextSeed.setMinutes(nextSeedM === 60 ? 0 : nextSeedM, 0, 0);
   if (nextSeedM === 60) nextSeed.setHours(now.getHours() + 1);
   timers.seed = getCountdown(nextSeed);
-  
+
   // Honey restocks every hour
   const nextHour = new Date(now);
   nextHour.setHours(now.getHours() + 1, 0, 0, 0);
   timers.honey = getCountdown(nextHour);
-  
+
   // Cosmetics restock every 7 hours
   const next7 = new Date(now);
   const totalHours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
   const next7h = Math.ceil(totalHours / 7) * 7;
   next7.setHours(next7h, 0, 0, 0);
   timers.cosmetics = getCountdown(next7);
-  
+
   return timers;
 }
 function getNextScheduledTime(startTime = getPHTime()) {
@@ -191,7 +191,7 @@ bot administrators only.
     }
 
     const updateMessage = args.join(" ") || "System update available with new features and improvements!";
-    
+
     // Send update to all active users
     for (const userId of activeSessions.keys()) {
       if (userId !== ADMIN_USER_ID) {
@@ -200,7 +200,7 @@ bot administrators only.
           version: systemVersion,
           timestamp: Date.now()
         });
-        
+
         const updateNotification = `╔══════════════════════════════════╗
 ║  🚀  𝗦𝘆𝘀𝘁𝗲𝗺 𝗨𝗽𝗱𝗮𝘁𝗲 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲  ║
 ╚══════════════════════════════════╝
@@ -221,7 +221,7 @@ Reply 'skip' to continue without updating
         await sendMessage(userId, { text: updateNotification }, pageAccessToken);
       }
     }
-    
+
     const adminConfirmation = `╭─────────────────────────────╮
 │  ✅  𝗨𝗽𝗱𝗮𝘁𝗲 𝗗𝗲𝗽𝗹𝗼𝘆𝗲𝗱  │
 ╰─────────────────────────────╯
@@ -266,12 +266,12 @@ Please wait while we refresh! ✨`;
     try {
       // Force clear cache and fetch new data
       lastSentCache.delete(senderId);
-      
+
       const [stockRes, weatherRes] = await Promise.all([
         fetchWithTimeout("https://gagstock.gleeze.com/grow-a-garden"),
         fetchWithTimeout("https://growagardenstock.com/api/stock/weather"),
       ]);
-      
+
       // Same fetch logic as in gagstock command...
       const backup = stockRes.data.data;
       const stockData = {
@@ -281,14 +281,14 @@ Please wait while we refresh! ✨`;
         cosmeticsStock: backup.cosmetics.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
         honeyStock: backup.honey.items.map(i => ({ name: i.name, value: Number(i.quantity) })),
       };
-      
+
       const weather = {
         currentWeather: weatherRes.data.currentWeather || "Unknown",
         icon: weatherRes.data.icon || "🌤️",
         cropBonuses: weatherRes.data.cropBonuses || "None",
         updatedAt: weatherRes.data.updatedAt || new Date().toISOString(),
       };
-      
+
       const restocks = getNextRestocks();
       const formatList = (arr) => arr.map(i => `  ├─ ${addEmoji(i.name)}: ${formatValue(i.value)}`).join("\n");
       const updatedAtPH = getPHTime().toLocaleString("en-PH", {
@@ -297,7 +297,7 @@ Please wait while we refresh! ✨`;
 
       const filters = session.filters || [];
       let filteredContent = "";
-      
+
       const processSection = (label, items, restock) => {
         let filtered = items;
         if (filters.length > 0) {
@@ -325,21 +325,21 @@ ${formatList(filters.length > 0 ? filtered : items)}
 ╚══════════════════════════════════╝
 
 `;
-      
+
       const weatherSection = `╭─ 🌤️ 𝗪𝗲𝗮𝘁𝗵𝗲𝗿 𝗜𝗻𝗳𝗼 ─────────╮
   ├─ Current: ${weather.icon} ${weather.currentWeather}
   └─ Bonus: 🌾 ${weather.cropBonuses}
 ╰─────────────────────────────╯
 
 `;
-      
+
       const footerSection = `╭─ 📊 𝗙𝗿𝗲𝘀𝗵 𝗗𝗮𝘁𝗮 ──────────╮
   └─ 📅 ${updatedAtPH}
 ╰─────────────────────────────╯`;
-      
+
       const message = `${refreshSuccessHeader}${filteredContent}${weatherSection}${footerSection}`;
       await sendMessage(senderId, { text: message }, pageAccessToken);
-      
+
     } catch (error) {
       const errorMessage = `╭─────────────────────────────╮
 │  ❌  𝗥𝗲𝗳𝗿𝗲𝘀𝗵 𝗙𝗮𝗶𝗹𝗲𝗱  │
@@ -503,24 +503,24 @@ ${formatList(filtered)}
         if (!alwaysSend && lastSent === currentKey) return false;
         if (filters.length > 0 && !matchedItems) return false;
         lastSentCache.set(senderId, currentKey);
-        
+
         const headerDesign = `╔══════════════════════════════════╗
 ║   🌾 𝗚𝗿𝗼𝘄 𝗔 𝗚𝗮𝗿𝗱𝗲𝗻 𝗦𝘁𝗼𝗰𝗸   ║
 ╚══════════════════════════════════╝
 
 `;
-        
+
         const weatherSection = `╭─ 🌤️ 𝗪𝗲𝗮𝘁𝗵𝗲𝗿 𝗜𝗻𝗳𝗼 ─────────╮
   ├─ Current: ${weather.icon} ${weather.currentWeather}
   └─ Bonus: 🌾 ${weather.cropBonuses}
 ╰─────────────────────────────╯
 
 `;
-        
+
         const footerSection = `╭─ 📊 𝗟𝗮𝘀𝘁 𝗨𝗽𝗱𝗮𝘁𝗲 ─────────╮
   └─ 📅 ${updatedAtPH}
 ╰─────────────────────────────╯`;
-        
+
         // Get user's name for personalized greeting
         let userName = "Friend";
         try {
@@ -541,7 +541,7 @@ ${formatList(filtered)}
 ╚══════════════════════════════════╝
 
 `;
-        
+
         const message = `${personalizedHeader}${filteredContent}${weatherSection}${footerSection}`;
         await sendMessage(senderId, { text: message }, pageAccessToken);
         return true;
@@ -557,17 +557,17 @@ ${formatList(filtered)}
       const timer = setTimeout(async function trigger() {
         const session = activeSessions.get(senderId);
         if (!session) return;
-        
+
         // Update last activity
         session.lastActivity = Date.now();
-        
+
         const notified = await fetchAndNotify(false);
         if (notified) {
           logger.debug(`Stock update sent to user: ${senderId}`);
         }
         runSchedule();
       }, wait);
-      
+
       activeSessions.set(senderId, { 
         timeout: timer, 
         lastActivity: Date.now(),
@@ -620,14 +620,14 @@ if (refreshCommand.aliases) {
 function isRateLimited(userId) {
   const now = Date.now();
   const userRequests = userRateLimit.get(userId) || [];
-  
+
   // Remove requests older than 1 minute
   const recentRequests = userRequests.filter(time => now - time < 60000);
-  
+
   if (recentRequests.length >= MAX_REQUESTS_PER_MINUTE) {
     return true;
   }
-  
+
   recentRequests.push(now);
   userRateLimit.set(userId, recentRequests);
   return false;
@@ -745,13 +745,13 @@ Hello ${userName}! 👋✨
 // Handle postback events
 async function handlePostback(senderId, postback) {
   logger.info(`Processing postback from ${senderId}: "${postback.payload}"`);
-  
+
   switch (postback.payload) {
     case 'GET_STARTED':
       newUsers.delete(senderId); // Remove from new users set
       await sendWelcomeMessage(senderId);
       break;
-      
+
     case 'HELP':
       const helpMessage = `╔══════════════════════════════════╗
 ║  🤖  𝗚𝗮𝗴𝘀𝘁𝗼𝗰𝗸 𝗕𝗼𝘁 𝗛𝗲𝗹𝗽  ║
@@ -782,17 +782,23 @@ async function handlePostback(senderId, postback) {
 ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────╮
 │ 🚀 update [message]        │
 │    Push updates to users    │
-╰─────────────────────────────╯` : ''}
+│                             │
+│ 🤖 deploy [code]           │
+│    AI auto-deploy code      │
+│                             │
+│ ⚡ livecode [js]           │
+│    Execute live JavaScript  │
+╰─────────────────────────────╯` :`` : ''}
 
 💫 Version: ${systemVersion} | Ready to help!`;
       await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
       break;
-      
+
     case 'REFRESH':
       // Execute refresh command
       await refreshCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
       break;
-      
+
     default:
       logger.warn(`Unknown postback payload: ${postback.payload}`);
   }
@@ -800,14 +806,14 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 
 async function handleMessage(senderId, message) {
   if (!message.text) return;
-  
+
   // Check if this is a new user
   if (newUsers.has(senderId)) {
     newUsers.delete(senderId);
     await sendWelcomeMessage(senderId);
     return;
   }
-  
+
   // Rate limiting check
   if (isRateLimited(senderId)) {
     logger.warn(`Rate limited user: ${senderId}`);
@@ -824,10 +830,10 @@ and try again in a moment.
     await sendMessage(senderId, { text: rateLimitMessage }, PAGE_ACCESS_TOKEN);
     return;
   }
-  
+
   logger.info(`Processing message from ${senderId}: "${message.text}"`);
   const text = message.text.trim();
-  
+
   // Check for update responses
   if (pendingUpdates.has(senderId)) {
     if (text.toLowerCase() === 'apply') {
@@ -862,7 +868,7 @@ by asking the admin.
       return;
     }
   }
-  
+
   const args = text.split(/\s+/);
   const commandName = args.shift().toLowerCase();
   const command = commands.get(commandName);
@@ -916,6 +922,12 @@ while processing your command.
 ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────╮
 │ 🚀 update [message]        │
 │    Push updates to users    │
+│                             │
+│ 🤖 deploy [code]           │
+│    AI auto-deploy code      │
+│                             │
+│ ⚡ livecode [js]           │
+│    Execute live JavaScript  │
 ╰─────────────────────────────╯` : ''}
 
 💫 Version: ${systemVersion} | Ready to help!`;
@@ -959,7 +971,7 @@ app.use((error, req, res, next) => {
 
 const server = app.listen(PORT, '0.0.0.0', async () => {
   logger.system(`Webhook is listening on port ${PORT}`);
-  
+
   // Set up bot features
   try {
     await setupGetStartedButton();
@@ -980,7 +992,7 @@ process.on('SIGTERM', () => {
   }
   activeSessions.clear();
   lastSentCache.clear();
-  
+
   server.close(() => {
     logger.system('Server closed');
     process.exit(0);
@@ -995,7 +1007,7 @@ process.on('SIGINT', () => {
 app.post('/webhook', async (req, res) => {
   try {
     let body = req.body;
-    
+
     // Validate webhook body
     if (!body || body.object !== 'page') {
       logger.warn('Invalid webhook object:', body?.object);
@@ -1043,7 +1055,7 @@ app.post('/webhook', async (req, res) => {
         }
       }
     }
-    
+
     res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
     logger.error('Webhook processing error:', error);
@@ -1086,10 +1098,12 @@ app.get('/status', (req, res) => {
     lastActivity: new Date(session.lastActivity).toISOString(),
     filters: session.filters
   }));
-  
+
   res.status(200).json({
     activeSessions: sessions,
     totalUsers: activeSessions.size,
     uptime: process.uptime()
   });
 });
+
+// This code modifies the help message to include new AI commands for the bot.
