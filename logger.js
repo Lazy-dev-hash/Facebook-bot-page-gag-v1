@@ -1,5 +1,6 @@
+
 // logger.js
-const chalk = require('chalk');
+import chalk from 'chalk';
 
 /**
  * Returns a formatted timestamp string.
@@ -44,4 +45,4 @@ const logger = {
   webhook: (...messages) => log(chalk.bgMagenta.white, '📥', 'WEBHOOK', ...messages),
 };
 
-module.exports = logger;
+export default logger;
