@@ -788,7 +788,7 @@ ${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ───────
 │                             │
 │ ⚡ livecode [js]           │
 │    Execute live JavaScript  │
-╰─────────────────────────────╯` :`` : ''}
+╰─────────────────────────────╯` : ''}
 
 💫 Version: ${systemVersion} | Ready to help!`;
       await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
