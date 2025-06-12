@@ -68,6 +68,7 @@ const MAX_REQUESTS_PER_MINUTE = 10;
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Set this in your Replit secrets
 const pendingUpdates = new Map(); // Store pending updates for users
 const systemVersion = "2.0.0"; // Current bot version
+const newUsers = new Set(); // Track new users who haven't seen welcome message
 
 // Clean up inactive sessions every 30 minutes
 setInterval(() => {
@@ -632,8 +633,180 @@ function isRateLimited(userId) {
   return false;
 }
 
+// Set up persistent menu and get started button
+async function setupPersistentMenu() {
+  const menuData = {
+    persistent_menu: [
+      {
+        locale: "default",
+        composer_input_disabled: false,
+        call_to_actions: [
+          {
+            type: "postback",
+            title: "🌱 Get Started",
+            payload: "GET_STARTED"
+          },
+          {
+            type: "postback", 
+            title: "📖 Help & Commands",
+            payload: "HELP"
+          },
+          {
+            type: "postback",
+            title: "🔄 Refresh Stock",
+            payload: "REFRESH"
+          }
+        ]
+      }
+    ]
+  };
+
+  try {
+    await axios.post('https://graph.facebook.com/v19.0/me/messenger_profile', menuData, {
+      params: { access_token: PAGE_ACCESS_TOKEN },
+      timeout: 10000
+    });
+    logger.success('Persistent menu set up successfully');
+  } catch (error) {
+    logger.error('Failed to set up persistent menu:', error.message);
+  }
+}
+
+// Set up get started button
+async function setupGetStartedButton() {
+  const getStartedData = {
+    get_started: {
+      payload: "GET_STARTED"
+    }
+  };
+
+  try {
+    await axios.post('https://graph.facebook.com/v19.0/me/messenger_profile', getStartedData, {
+      params: { access_token: PAGE_ACCESS_TOKEN },
+      timeout: 10000
+    });
+    logger.success('Get Started button set up successfully');
+  } catch (error) {
+    logger.error('Failed to set up Get Started button:', error.message);
+  }
+}
+
+// Send welcome message to new users
+async function sendWelcomeMessage(senderId) {
+  // Get user's name for personalized greeting
+  let userName = "Friend";
+  try {
+    const userInfoResponse = await axios.get(`https://graph.facebook.com/v19.0/${senderId}`, {
+      params: { 
+        fields: 'first_name',
+        access_token: PAGE_ACCESS_TOKEN 
+      },
+      timeout: 5000
+    });
+    userName = userInfoResponse.data.first_name || "Friend";
+  } catch (error) {
+    logger.debug("Could not fetch user name:", error.message);
+  }
+
+  const welcomeMessage = `╔══════════════════════════════════╗
+║   🌾 Welcome to GagStock Bot! 🤖   ║
+╚══════════════════════════════════╝
+
+Hello ${userName}! 👋✨
+
+🎉 Welcome to the most beautiful 
+   Grow A Garden stock tracker!
+
+╭─ 🌟 What I Can Do ──────────╮
+│ 📊 Real-time stock tracking  │
+│ 🌤️ Weather updates          │
+│ ⏰ Restock countdown timers   │
+│ 🎯 Custom item filtering     │
+│ 🔄 Auto-refresh system       │
+╰───────────────────────────────╯
+
+╭─ 📜 Bot Rules & Guidelines ─╮
+│ 🚫 No spamming commands      │
+│ ⏰ Rate limit: 10/minute     │
+│ 🎯 Use filters for specifics │
+│ 💬 Be patient with updates   │
+│ 🤝 Respect other users       │
+╰───────────────────────────────╯
+
+🚀 Ready to start? Type:
+   'gagstock on' - Track all items
+   'help' - See all commands
+
+🌱 Let's grow together! 💚`;
+
+  await sendMessage(senderId, { text: welcomeMessage }, PAGE_ACCESS_TOKEN);
+}
+
+// Handle postback events
+async function handlePostback(senderId, postback) {
+  logger.info(`Processing postback from ${senderId}: "${postback.payload}"`);
+  
+  switch (postback.payload) {
+    case 'GET_STARTED':
+      newUsers.delete(senderId); // Remove from new users set
+      await sendWelcomeMessage(senderId);
+      break;
+      
+    case 'HELP':
+      const helpMessage = `╔══════════════════════════════════╗
+║  🤖  𝗚𝗮𝗴𝘀𝘁𝗼𝗰𝗸 𝗕𝗼𝘁 𝗛𝗲𝗹𝗽  ║
+╚══════════════════════════════════╝
+
+✨ 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
+
+╭─ 🌾 Main Commands ─────────╮
+│ 🟢 gagstock on             │
+│    Start tracking all items │
+│                             │
+│ 🎯 gagstock on [filter]    │
+│    Track specific items     │
+│    Example: Sunflower | Can │
+│                             │
+│ 🔴 gagstock off            │
+│    Stop tracking            │
+╰─────────────────────────────╯
+
+╭─ ⚡ Quick Actions ─────────╮
+│ 🔄 refresh                  │
+│    Force refresh stock data │
+│                             │
+│ 📖 help                     │
+│    Show this help menu      │
+╰─────────────────────────────╯
+
+${senderId === ADMIN_USER_ID ? `╭─ 👑 Admin Commands ────────╮
+│ 🚀 update [message]        │
+│    Push updates to users    │
+╰─────────────────────────────╯` : ''}
+
+💫 Version: ${systemVersion} | Ready to help!`;
+      await sendMessage(senderId, { text: helpMessage }, PAGE_ACCESS_TOKEN);
+      break;
+      
+    case 'REFRESH':
+      // Execute refresh command
+      await refreshCommand.execute(senderId, [], PAGE_ACCESS_TOKEN);
+      break;
+      
+    default:
+      logger.warn(`Unknown postback payload: ${postback.payload}`);
+  }
+}
+
 async function handleMessage(senderId, message) {
   if (!message.text) return;
+  
+  // Check if this is a new user
+  if (newUsers.has(senderId)) {
+    newUsers.delete(senderId);
+    await sendWelcomeMessage(senderId);
+    return;
+  }
   
   // Rate limiting check
   if (isRateLimited(senderId)) {
@@ -784,8 +957,17 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   logger.system(`Webhook is listening on port ${PORT}`);
+  
+  // Set up bot features
+  try {
+    await setupGetStartedButton();
+    await setupPersistentMenu();
+    logger.success('Bot setup completed successfully!');
+  } catch (error) {
+    logger.error('Failed to set up bot features:', error);
+  }
 });
 
 // Graceful shutdown handling
@@ -849,6 +1031,15 @@ app.post('/webhook', async (req, res) => {
           handleMessage(sender_psid, webhook_event.message).catch(error => {
             logger.error('Error handling message:', error);
           });
+        } else if (webhook_event.postback) {
+          // Handle postback events (buttons, get started, etc.)
+          handlePostback(sender_psid, webhook_event.postback).catch(error => {
+            logger.error('Error handling postback:', error);
+          });
+        } else if (webhook_event.optin) {
+          // Handle new user opt-ins
+          newUsers.add(sender_psid);
+          logger.info(`New user opted in: ${sender_psid}`);
         }
       }
     }
