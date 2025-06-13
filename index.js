@@ -258,7 +258,11 @@ const activeSessions = new Map();
 const lastSentCache = new Map();
 const userRateLimit = new Map();
 const userDoNotDisturb = new Map();
-const customCommandUsers = new Set(); // Allowed users for custom commands
+const customCommandUsers = new Set([
+  // Add VIP user IDs here
+  // "1234567890123456", // Example user ID
+  // "9876543210987654", // Another example user ID
+]); // Allowed users for custom commands
 const MAX_REQUESTS_PER_MINUTE = 10;
 
 // Enhanced Admin and update system
@@ -1562,6 +1566,466 @@ Perfect for timing your purchases! ⏰✨`;
   }
 };
 
+// User ID Command
+const idCommand = {
+  name: "id",
+  aliases: ["myid", "userid", "getid"],
+  description: "Get your Facebook user ID",
+  usage: "id",
+  category: "Utility 🔧",
+  async execute(senderId, args, pageAccessToken) {
+    // Get user's name for personalized response
+    let userName = "Friend";
+    try {
+      const userInfoResponse = await axios.get(`https://graph.facebook.com/v19.0/${senderId}`, {
+        params: { 
+          fields: 'first_name,last_name',
+          access_token: pageAccessToken 
+        },
+        timeout: 5000
+      });
+      userName = userInfoResponse.data.first_name || "Friend";
+    } catch (error) {
+      logger.debug("Could not fetch user name for ID command:", error.message);
+    }
+
+    const idMessage = `╔══════════════════════════════════╗
+║  🆔  𝗬𝗼𝘂𝗿 𝗙𝗮𝗰𝗲𝗯𝗼𝗼𝗸 𝗜𝗗  ║
+╚══════════════════════════════════╝
+
+👋 Hi ${userName}! Here's your info:
+
+╭─ 🆔 User Information ─────────╮
+│ 👤 Name: ${userName}                   │
+│ 🔢 Your ID: ${senderId}       │
+│ 🌟 Status: Verified User      │
+│ ✨ Platform: Facebook         │
+╰────────────────────────────────╯
+
+💡 **Use Cases:**
+• 🛡️ Admin access requests
+• 🎯 VIP feature applications  
+• 🔧 Technical support
+• 📊 Bot development
+
+📋 Copy this ID for any admin 
+   requests or support needs! ✨`;
+
+    await sendMessage(senderId, { text: idMessage }, pageAccessToken);
+    logger.info(`🆔 ID command used by user: ${senderId} (${userName})`);
+  }
+};
+
+// Notify Command (Admin Only)
+const notifyCommand = {
+  name: "notify",
+  aliases: ["announce", "broadcast"],
+  description: "Send notifications to users about bot status",
+  usage: "notify offline | notify online | notify [custom_message]",
+  category: "Admin 👑",
+  async execute(senderId, args, pageAccessToken) {
+    if (senderId !== ADMIN_USER_ID) {
+      const unauthorizedMessage = `╔══════════════════════════════════╗
+║  🔒  𝗔𝗱𝗺𝗶𝗻 𝗔𝗰𝗰𝗲𝘀𝘀  ║
+║      𝗥𝗲𝗾𝘂𝗶𝗿𝗲𝗱! ⚡            ║
+╚══════════════════════════════════╝
+
+🛡️ This command is restricted to 
+   administrators only.
+
+🌟 Contact the bot owner for 
+   administrative access! ✨`;
+      return await sendMessage(senderId, { text: unauthorizedMessage }, pageAccessToken);
+    }
+
+    const messageType = args[0]?.toLowerCase();
+    const customMessage = args.slice(1).join(' ');
+
+    if (!messageType) {
+      const usageMessage = `╔══════════════════════════════════╗
+║  📢  𝗡𝗼𝘁𝗶𝗳𝘆 𝗖𝗼𝗺𝗺𝗮𝗻𝗱  ║
+╚══════════════════════════════════╝
+
+🌟 Available notification types:
+
+╭─ 🌙 Offline Notification ─────╮
+│ notify offline                │
+│ └─ Bot going offline alert    │
+╰────────────────────────────────╯
+
+╭─ ☀️ Online Notification ──────╮
+│ notify online                 │
+│ └─ Bot back online alert      │
+╰────────────────────────────────╯
+
+╭─ 📝 Custom Message ───────────╮
+│ notify [your message]         │
+│ └─ Send custom announcement   │
+╰────────────────────────────────╯
+
+💡 Examples:
+• notify offline
+• notify Maintenance in 5 minutes ✨`;
+      return await sendMessage(senderId, { text: usageMessage }, pageAccessToken);
+    }
+
+    let notificationMessage = "";
+    let sentCount = 0;
+
+    if (messageType === 'offline') {
+      notificationMessage = `╔══════════════════════════════════╗
+║  🌙  𝗕𝗼𝘁 𝗢𝗳𝗳𝗹𝗶𝗻𝗲 ║
+║      𝗡𝗼𝘁𝗶𝗳𝗶𝗰𝗮𝘁𝗶𝗼𝗻 📢          ║
+╚══════════════════════════════════╝
+
+😴 The bot will be going offline 
+   for scheduled maintenance.
+
+╭─ 🌙 Offline Schedule ─────────╮
+│ ⏰ Time: 12:00 AM - 5:00 AM   │
+│ 🔄 Daily: Automatic schedule  │
+│ 🎵 Voice: Relaxing music      │
+│ 💤 Purpose: Rest & maintenance│
+╰────────────────────────────────╯
+
+🌟 We'll be back at 5:00 AM with 
+   enhanced features! Sweet dreams! ✨`;
+    } else if (messageType === 'online') {
+      notificationMessage = `╔══════════════════════════════════╗
+║  ☀️  𝗕𝗼𝘁 𝗢𝗻𝗹𝗶𝗻𝗲! ║
+║      𝗪𝗲𝗹𝗰𝗼𝗺𝗲 𝗕𝗮𝗰𝗸! 🌟        ║
+╚══════════════════════════════════╝
+
+🎉 Good morning! The bot is back 
+   online and ready to serve!
+
+╭─ ☀️ Active Features ──────────╮
+│ 🟢 Status: Fully operational  │
+│ ⚡ Tracking: Enhanced & ready  │
+│ 🌟 Features: All systems go   │
+│ 💎 Premium: VIP access active │
+╰────────────────────────────────╯
+
+🚀 Ready for another amazing day 
+   of stock tracking! Let's go! ✨`;
+    } else {
+      notificationMessage = `╔══════════════════════════════════╗
+║  📢  𝗔𝗱𝗺𝗶𝗻 ║
+║      𝗔𝗻𝗻𝗼𝘂𝗻𝗰𝗲𝗺𝗲𝗻𝘁 ✨        ║
+╚══════════════════════════════════╝
+
+📣 **Admin Announcement:**
+
+${messageType} ${customMessage}
+
+╭─ 👑 From the Admin Team ──────╮
+│ 🌟 Thank you for using our bot│
+│ 💚 Your support means a lot   │
+│ ✨ More features coming soon  │
+╰────────────────────────────────╯
+
+🚀 Enhanced GagStock Bot Team! 💎`;
+    }
+
+    // Send to all active users
+    for (const userId of activeSessions.keys()) {
+      try {
+        await sendMessage(userId, { text: notificationMessage }, pageAccessToken);
+        sentCount++;
+        // Small delay to prevent rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        logger.error(`Failed to send notification to user ${userId}:`, error.message);
+      }
+    }
+
+    const confirmMessage = `╔══════════════════════════════════╗
+║  ✅  𝗡𝗼𝘁𝗶𝗳𝗶𝗰𝗮𝘁𝗶𝗼𝗻 ║
+║      𝗦𝗲𝗻𝘁! 📤                ║
+╚══════════════════════════════════╝
+
+🎉 Notification sent successfully!
+
+╭─ 📊 Delivery Stats ──────────╮
+│ 📤 Sent to: ${sentCount} users         │
+│ 📱 Platform: Facebook        │
+│ ⚡ Speed: Instant delivery    │
+│ ✅ Status: Complete          │
+╰────────────────────────────────╯
+
+🌟 All active users have been 
+   notified! Mission accomplished! ✨`;
+
+    await sendMessage(senderId, { text: confirmMessage }, pageAccessToken);
+    logger.success(`📢 Admin notification sent to ${sentCount} users by ${senderId}`);
+  }
+};
+
+// Enhanced Admin Command with more features
+const adminCommand = {
+  name: "admin",
+  aliases: ["manage", "vip"],
+  description: "Enhanced admin commands with advanced features",
+  usage: "admin [action] | admin help",
+  category: "Admin 👑",
+  async execute(senderId, args, pageAccessToken) {
+    if (senderId !== ADMIN_USER_ID) {
+      const unauthorizedMessage = `╔══════════════════════════════════╗
+║  🔒  𝗔𝗱𝗺𝗶𝗻 𝗔𝗰𝗰𝗲𝘀𝘀  ║
+║      𝗥𝗲𝗾𝘂𝗶𝗿𝗲𝗱! ⚡            ║
+╚══════════════════════════════════╝
+
+🛡️ This command is restricted to 
+   administrators only.
+
+🌟 Contact the bot owner for 
+   administrative access! ✨`;
+      return await sendMessage(senderId, { text: unauthorizedMessage }, pageAccessToken);
+    }
+
+    const action = args[0]?.toLowerCase();
+    
+    if (action === 'addvip') {
+      const userId = args[1];
+      if (!userId) {
+        const usageMessage = `╔══════════════════════════════════╗
+║  ⚠️  𝗨𝘀𝗮𝗴𝗲 𝗘𝗿𝗿𝗼𝗿  ║
+╚══════════════════════════════════╝
+
+🔧 Correct usage:
+   admin addvip [user_id]
+
+💡 Example:
+   admin addvip 1234567890123456
+
+🌟 Get user ID from their message logs! ✨`;
+        return await sendMessage(senderId, { text: usageMessage }, pageAccessToken);
+      }
+
+      customCommandUsers.add(userId);
+      const successMessage = `╔══════════════════════════════════╗
+║  ✅  𝗩𝗜𝗣 𝗔𝗱𝗱𝗲𝗱! ║
+╚══════════════════════════════════╝
+
+👑 User successfully added to VIP!
+
+╭─ 💎 VIP Details ──────────────╮
+│ 🆔 User ID: ${userId}        │
+│ ✨ Status: VIP Active         │
+│ 🚀 Access: Premium Commands   │
+│ 🌟 Level: Enhanced Features   │
+╰────────────────────────────────╯
+
+🎉 They can now use premium commands! ✨`;
+      await sendMessage(senderId, { text: successMessage }, pageAccessToken);
+      logger.success(`👑 Added user ${userId} to VIP by admin ${senderId}`);
+      
+    } else if (action === 'removevip') {
+      const userId = args[1];
+      if (!userId) {
+        const usageMessage = `╔══════════════════════════════════╗
+║  ⚠️  𝗨𝘀𝗮𝗴𝗲 𝗘𝗿𝗿𝗼𝗿  ║
+╚══════════════════════════════════╝
+
+🔧 Correct usage:
+   admin removevip [user_id]
+
+💡 Example:
+   admin removevip 1234567890123456
+
+🌟 Use 'admin listvip' to see VIPs! ✨`;
+        return await sendMessage(senderId, { text: usageMessage }, pageAccessToken);
+      }
+
+      const removed = customCommandUsers.delete(userId);
+      if (removed) {
+        const successMessage = `╔══════════════════════════════════╗
+║  🗑️  𝗩𝗜𝗣 𝗥𝗲𝗺𝗼𝘃𝗲𝗱! ║
+╚══════════════════════════════════╝
+
+💔 User removed from VIP access.
+
+╭─ 📋 Removal Details ──────────╮
+│ 🆔 User ID: ${userId}        │
+│ ❌ Status: VIP Revoked        │
+│ 🚫 Access: Basic Only         │
+│ 📉 Level: Standard Features   │
+╰────────────────────────────────╯
+
+They no longer have premium access. ⚡`;
+        await sendMessage(senderId, { text: successMessage }, pageAccessToken);
+        logger.info(`🗑️ Removed user ${userId} from VIP by admin ${senderId}`);
+      } else {
+        const notFoundMessage = `╔══════════════════════════════════╗
+║  ❓  𝗩𝗜𝗣 𝗡𝗼𝘁 𝗙𝗼𝘂𝗻𝗱  ║
+╚══════════════════════════════════╝
+
+🤔 User ${userId} is not in VIP list.
+
+Use 'admin listvip' to see all VIPs! ✨`;
+        await sendMessage(senderId, { text: notFoundMessage }, pageAccessToken);
+      }
+      
+    } else if (action === 'listvip') {
+      const vipUsers = Array.from(customCommandUsers);
+      if (vipUsers.length === 0) {
+        const emptyMessage = `╔══════════════════════════════════╗
+║  📋  𝗩𝗜𝗣 𝗟𝗶𝘀𝘁 ║
+╚══════════════════════════════════╝
+
+📝 No VIP users currently registered.
+
+Use 'admin addvip [user_id]' to add! ✨`;
+        await sendMessage(senderId, { text: emptyMessage }, pageAccessToken);
+      } else {
+        const vipList = vipUsers.map((id, index) => `  ${index + 1}. ${id}`).join('\n');
+        const listMessage = `╔══════════════════════════════════╗
+║  📋  𝗩𝗜𝗣 𝗨𝘀𝗲𝗿 𝗟𝗶𝘀𝘁  ║
+╚══════════════════════════════════╝
+
+👑 Current VIP Users (${vipUsers.length}):
+
+${vipList}
+
+🌟 All have access to premium features! ✨`;
+        await sendMessage(senderId, { text: listMessage }, pageAccessToken);
+      }
+      
+    } else if (action === 'stats') {
+      const uptimeHours = Math.floor(process.uptime() / 3600);
+      const uptimeMinutes = Math.floor((process.uptime() % 3600) / 60);
+      const memoryUsed = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+      
+      const statsMessage = `╔══════════════════════════════════╗
+║  📊  𝗕𝗼𝘁 𝗦𝘁𝗮𝘁𝗶𝘀𝘁𝗶𝗰𝘀  ║
+╚══════════════════════════════════╝
+
+🚀 **System Performance:**
+
+╭─ ⚡ Runtime Stats ────────────╮
+│ ⏰ Uptime: ${uptimeHours}h ${uptimeMinutes}m         │
+│ 👥 Active Users: ${activeSessions.size}           │
+│ 💾 Memory: ${memoryUsed}MB used      │
+│ 🌟 Version: ${systemVersion}              │
+╰────────────────────────────────╯
+
+╭─ 👑 VIP Management ───────────╮
+│ 💎 VIP Users: ${customCommandUsers.size}            │
+│ 🔄 Cache Size: ${lastSentCache.size}           │
+│ 🔕 DND Users: ${userDoNotDisturb.size}            │
+╰────────────────────────────────╯
+
+╭─ 🌙 Schedule Status ──────────╮
+│ 🤖 Bot Online: ${botIsOnline ? 'Yes ✅' : 'No ❌'}      │
+│ 😴 Offline: 12:00 AM - 5:00 AM│
+│ 🎵 Voice Messages: Active     │
+╰────────────────────────────────╯
+
+🌟 All systems running smoothly! ✨`;
+      await sendMessage(senderId, { text: statsMessage }, pageAccessToken);
+      
+    } else if (action === 'backup') {
+      const backupData = {
+        vipUsers: Array.from(customCommandUsers),
+        activeSessions: activeSessions.size,
+        timestamp: new Date().toISOString(),
+        version: systemVersion
+      };
+      
+      const backupMessage = `╔══════════════════════════════════╗
+║  💾  𝗕𝗮𝗰𝗸𝘂𝗽 𝗖𝗿𝗲𝗮𝘁𝗲𝗱  ║
+╚══════════════════════════════════╝
+
+📦 **System Backup Generated:**
+
+\`\`\`json
+${JSON.stringify(backupData, null, 2)}
+\`\`\`
+
+╭─ 💾 Backup Details ───────────╮
+│ 👑 VIP Users: ${backupData.vipUsers.length} backed up    │
+│ 📅 Date: ${new Date().toLocaleDateString()} │
+│ ⏰ Time: ${new Date().toLocaleTimeString()} │
+│ ✅ Status: Complete          │
+╰────────────────────────────────╯
+
+🔒 Keep this backup safe! ✨`;
+      await sendMessage(senderId, { text: backupMessage }, pageAccessToken);
+      
+    } else if (action === 'broadcast') {
+      const message = args.slice(1).join(' ');
+      if (!message) {
+        const usageMsg = `╔══════════════════════════════════╗
+║  📢  𝗕𝗿𝗼𝗮𝗱𝗰𝗮𝘀𝘁 𝗨𝘀𝗮𝗴𝗲  ║
+╚══════════════════════════════════╝
+
+🌟 Usage: admin broadcast [message]
+
+💡 Example:
+admin broadcast Server maintenance 
+in 30 minutes! ⚠️
+
+🚀 This will send to all active users! ✨`;
+        return await sendMessage(senderId, { text: usageMsg }, pageAccessToken);
+      }
+      
+      // Use the notify command functionality
+      await notifyCommand.execute(senderId, args.slice(1), pageAccessToken);
+      
+    } else {
+      const helpMessage = `╔══════════════════════════════════╗
+║  👑  𝗘𝗻𝗵𝗮𝗻𝗰𝗲𝗱 𝗔𝗱𝗺𝗶𝗻  ║
+║      𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀 ✨              ║
+╚══════════════════════════════════╝
+
+🛡️ **VIP Management:**
+
+╭─ ➕ Add VIP User ─────────────╮
+│ admin addvip [user_id]        │
+│ └─ Grant premium access       │
+╰────────────────────────────────╯
+
+╭─ ➖ Remove VIP User ──────────╮
+│ admin removevip [user_id]     │
+│ └─ Revoke premium access      │
+╰────────────────────────────────╯
+
+╭─ 📋 List VIP Users ───────────╮
+│ admin listvip                 │
+│ └─ Show all VIP users         │
+╰────────────────────────────────╯
+
+🚀 **System Management:**
+
+╭─ 📊 Bot Statistics ───────────╮
+│ admin stats                   │
+│ └─ Show system performance    │
+╰────────────────────────────────╯
+
+╭─ 💾 Create Backup ────────────╮
+│ admin backup                  │
+│ └─ Generate system backup     │
+╰────────────────────────────────╯
+
+╭─ 📢 Broadcast Message ────────╮
+│ admin broadcast [message]     │
+│ └─ Send to all active users   │
+╰────────────────────────────────╯
+
+📢 **Notifications:**
+
+╭─ 🔔 Quick Notifications ──────╮
+│ notify offline - Bot going off│
+│ notify online - Bot back on   │
+│ notify [msg] - Custom message │
+╰────────────────────────────────╯
+
+🌟 Enhanced admin toolkit ready! ✨`;
+      await sendMessage(senderId, { text: helpMessage }, pageAccessToken);
+    }
+  }
+};
+
 // Custom Command for Allowed Users
 const customCommand = {
   name: "custom",
@@ -1710,7 +2174,7 @@ ${divineList}
 const commands = new Map();
 
 // Register all commands
-[gagstockCommand, refreshCommand, doNotDisturbCommand, nextStockCommand, customCommand].forEach(cmd => {
+[gagstockCommand, refreshCommand, doNotDisturbCommand, nextStockCommand, customCommand, adminCommand, idCommand, notifyCommand].forEach(cmd => {
   commands.set(cmd.name, cmd);
   if (cmd.aliases) {
     cmd.aliases.forEach(alias => commands.set(alias, cmd));
@@ -1859,11 +2323,27 @@ quickly for our enhanced systems.
 │    Check restock timers        │
 ╰────────────────────────────────╯
 
+╭─ 🔧 Utility Commands ──────────╮
+│ 🆔 id                          │
+│    Get your Facebook user ID   │
+│                                │
+│ 👑 custom [action]             │
+│    Premium VIP commands        │
+╰────────────────────────────────╯
+
 ╭─ 💬 Natural Language ─────────╮
 │ Just ask me questions like:    │
 │ "What stock today?"           │
 │ "When is next restock?"       │
 │ "Show me divine items"        │
+╰────────────────────────────────╯
+
+╭─ 👑 Admin Commands ────────────╮
+│ 🛡️ admin [action]              │
+│    VIP & system management     │
+│                                │
+│ 📢 notify [type/message]       │
+│    Send notifications to users │
 ╰────────────────────────────────╯
 
 ╭─ 🌟 Enhanced Features ─────────╮
@@ -1874,6 +2354,8 @@ quickly for our enhanced systems.
 │ ✨ Beautiful notifications    │
 │ 💬 Natural language support   │
 │ 🔄 Quick refresh buttons      │
+│ 🆔 User ID tracking           │
+│ 📢 Admin notifications        │
 ╰────────────────────────────────╯
 
 💫 Enhanced & ready to serve! 🚀`;
